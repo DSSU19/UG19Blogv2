@@ -1,0 +1,21 @@
+body{
+    margin: 0;
+}
+
+/*Login and Sign-Up Navs*/
+
+.scream-image-resize{
+    width: 10%;
+}
+
+.nav-items{
+    display: flex;
+    justify-content: center;
+    background-color: beige;
+}
+
+
+
+.form-design{
+    box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+}

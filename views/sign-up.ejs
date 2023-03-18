@@ -7,11 +7,15 @@
 <body>
 <%- include('partials/homenav') %>
 <div class="form-design">
-    <h1>Login</h1>
-    <form action="/login" method="post">
+    <h1>Sign-Up</h1>
+    <form action="/sign-up" method="post">
         <div class="form-input-group">
             <label for="email">Email</label><br>
             <input type="email" id="email" name="email" value="" required><br>
+        </div>
+        <div class="form-input-group">
+            <label for="username">Username</label><br>
+            <input type="username" id="username" name="username" value="" required><br><br>
         </div>
         <div class="form-input-group">
             <label for="password">Password</label><br>
@@ -21,12 +25,6 @@
         <div class="form-input-group">
             <input type="submit" value="Submit">
         </div>
-        <div>
-            <p>Don't have an account?
-             <a href="/sign-up">Sign-Up</a>
-            </p>
-        </div>
-
         <% if (message) { %>
             <div>
                 <p><b>Message:</b>  <%= message%></p>
@@ -40,9 +38,4 @@
     </form>
 </div>
 
-
-
-
-
 </body>
-</html>
