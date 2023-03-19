@@ -1,4 +1,5 @@
 const express = require('express');
+require('dotenv').config({path:'info.env'});
 const https = require('https');
 const bodyParser = require('body-parser');
 const fs = require('fs');
@@ -86,27 +87,36 @@ function escapeAllInput(reqBody){
     const regex = /[<>&"'/]/g;
     for (const inputName in reqBody){
         reqBody[inputName]  = reqBody[inputName].replace(regex, (match) => escapeChars[match] )
+
     }
-    console.log("This is the escaped version" + reqBody);
+    //console.log("This is the escaped version" + JSON.stringify(reqBody));
     return reqBody
 }
 
-//function to check if the user already exists
+//function to check if the  user already exists (must be a verified user)
 function userExistsCheck(email, res){
-    const userSelectQuery = {
-        text: 'SELECT * FROM users WHERE email = $1',
-        values: [email] // 24 hours in milliseconds
-    };
-    pool.query(userSelectQuery, (err, result)=>{
-        if(err){
-            res.render('index', {errors: "There was an error during the sign-up process. Please refresh the page and try again", message: false})
-        }else if(result.rows.length === 0){
-            return false;
-        }else if(result.rows.length > 0) {
-            return true;
-
-        }
-    })
+    return new Promise((resolve, reject) => {
+        //console.log('Exists function is executed');
+        const userSelectQuery = {
+            text: 'SELECT * FROM users WHERE email = $1 AND isverified = $2',
+            values: [email, true] // 24 hours in milliseconds
+        };
+        pool.query(userSelectQuery)
+            .then((result) => {
+                //console.log(result.rows[0])
+                if (result.rows.length > 0) {
+                    //console.log("User exists");
+                    resolve(true);
+                } else {
+                    console.log("User does not exist");
+                    resolve(false);
+                }
+            })
+            .catch((err) => {
+                console.log("The error is:" + err)
+                reject("There was an error during the sign-up process. Please refresh and try again");
+            });
+    });
 }
 
 
@@ -159,20 +169,27 @@ app.get('/email-verification', (req,res)=>{
 /*All the application post routes*/
 app.post('/sign-up', (req,res)=>{
     if(signUpValidation(req.body).isValid){
+
         const escapedReqBody = escapeAllInput(req.body)
         const email = escapedReqBody.email;
         const password = escapedReqBody.password;
         const username = escapedReqBody.username;
         //Check if the user already exists in the system:
-        if(!userExistsCheck(email, res)){
-        //If user does not already exists in the password then we can hash the password
+
+        userExistsCheck(email, res).then((userExists) => {
+            if (userExists) {
+                //console.log(res.toString())
+                //Redirect the user to the email verification page in order to prevent account enumeration, but no actual email will be sent to that user
+                //since the user already exists in the system.
+                res.render('email-verification', {email:email})
+
+                // do something
+            } else {
+                //If user does not already exists in the password then we can hash the password
+                console.log("User does not exist");
+            }
+        });
 
 
-        }else{
-            //Redirect the user to the email verification page in order to prevent account enumeration, but no actual email will be sent to that user
-            //since the user already exists in the system.
-            res.render('email-verification', {email:email})
-        }
-        console.log(email, password, username);
     }
 })

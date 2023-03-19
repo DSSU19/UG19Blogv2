@@ -2,6 +2,15 @@ const assert = require('assert');
 const request = require('supertest');
 const app = require('../server.js');
 
+const { Pool } = require('pg');
+const pool = new Pool({
+    host: process.env.localhost,
+    port: process.env.port,
+    user: process.env.user,
+    database: process.env.testDatabase,
+    password:  process.env.password,
+});
+
 
 describe('validateInputs', function() {
     //Testing when the user doesn't put anything in the username,  password, and email
@@ -127,9 +136,46 @@ describe('escapeInput', function(){
 })
 
 describe('userAlreadyExists', function(){
-    //User already exists in the database and has already sign-up
-    it('User exists in the database and has already sign-up', function() {
+    // Clear the test database and insert a test user before running the tests
+    before(function(done) {
+        const deleteUserQuery = {
+            text: 'DELETE FROM users',
+        };
 
+        pool.query(deleteUserQuery).then(()=>{
+            const testUserData = { email: 'testemail@gmail.com', password: 'ce029hdg0a9d31de9576aa7c34c14fb30', verificationtoken: 'ce029hdg4d5632e9e70a9d31de9576aa7c34c14fb30', firstname: 'testUserName', creationTime: '1678781045009'};
+            const insertTestUser = {
+                text: 'INSERT INTO users (email, password, isverified, verificationtoken, firstname, creationTime) VALUES ($1, $2, $3, $4, $5, $6)',
+                values: [testUserData.email, testUserData.password, true,testUserData.verificationtoken, testUserData.firstname, testUserData.creationTime  ] // 24 hours in milliseconds
+            };
+            pool.query(insertTestUser).then(()=>{
+                console.log("User has been inserted")
+                done()
+            }).catch((err)=>{
+                console.log("Insertion error is: "+ err)
+                done()
+
+            })
+
+        }).catch((err)=>{
+            console.log("This is the error"+ err)
+            done(err)
+        })
+
+
+    });
+
+    //User already exists in the database and has already sign-up
+    it('Testing when the user already exists in the database ', function(done) {
+        const res = {
+            render: (view, data) => {
+                assert.fail(`render() should not be called with view=${view} and data=${data}`);
+            },
+        };
+        app.userExistsCheck('testemail@gmail.com', { render: function() {} },  function(exists) {
+            assert.strictEqual(exists, true);
+            done();
+        });
     });
 
 })
