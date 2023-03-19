@@ -22,12 +22,13 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 //Pg client information to enable queries from the database blog.
 const { Pool, result } = require('pg');
+const databaseName = process.env.NODE_ENV === "test" ? process.env.testDatabase : process.env.database;
 
 const pool = new Pool({
     host: process.env.localhost,
     port: process.env.port,
     user: process.env.user,
-    database: process.env.database,
+    database: databaseName,
     password:  process.env.password,
 });
 
@@ -94,7 +95,7 @@ function escapeAllInput(reqBody){
 }
 
 //function to check if the  user already exists (must be a verified user)
-function userExistsCheck(email, res){
+function userExistsCheck(email){
     return new Promise((resolve, reject) => {
         //console.log('Exists function is executed');
         const userSelectQuery = {
@@ -103,7 +104,7 @@ function userExistsCheck(email, res){
         };
         pool.query(userSelectQuery)
             .then((result) => {
-                //console.log(result.rows[0])
+                console.log(result.rows[0])
                 if (result.rows.length > 0) {
                     //console.log("User exists");
                     resolve(true);
@@ -176,7 +177,7 @@ app.post('/sign-up', (req,res)=>{
         const username = escapedReqBody.username;
         //Check if the user already exists in the system:
 
-        userExistsCheck(email, res).then((userExists) => {
+        userExistsCheck(email).then((userExists) => {
             if (userExists) {
                 //console.log(res.toString())
                 //Redirect the user to the email verification page in order to prevent account enumeration, but no actual email will be sent to that user
@@ -190,6 +191,9 @@ app.post('/sign-up', (req,res)=>{
             }
         });
 
+
+    }else{
+        res.render('sign-up', {errors: "There is an error with your input value", message: false})
 
     }
 })
