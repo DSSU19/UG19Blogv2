@@ -22,6 +22,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 //Pg client information to enable queries from the database blog.
 const { Pool, result } = require('pg');
+//Switches the database name based on whether we are testing or using the actual application
 const databaseName = process.env.NODE_ENV === "test" ? process.env.testDatabase : process.env.database;
 
 const pool = new Pool({
