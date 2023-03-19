@@ -1,6 +1,9 @@
 const assert = require('assert');
 const request = require('supertest');
 const app = require('../server.js');
+const nodemailer = require("nodemailer");
+const crypto = require('crypto');
+const fs = require('fs');
 
 const { Pool } = require('pg');
 const testPool = new Pool({
@@ -164,6 +167,72 @@ describe('userAlreadyExists', function(){
         const userExists = await app.userExistsCheck('abbyammo13@gmail.com');
         assert.strictEqual(userExists, true);
     });
+
+})
+
+describe('passwordStore',  function (){
+    const saltFileName= 'test/info/test_salt.json'
+    const pepperFileName= 'test/info/test_pepper.json'
+    before(async function() {
+        // runs before all tests in this file regardless where this line is defined.
+        // Read the JSON file
+        const saltData = await fs.promises.readFile(saltFileName, 'utf8');
+        const saltObj = JSON.parse(saltData);
+        const pepperData = await fs.promises.readFile(pepperFileName, 'utf8');
+        const pepperObj = JSON.parse(pepperData);
+        // Find the index of the object to remove
+        const index = saltObj.user_info.findIndex((obj) => obj.email === 'testuser@gmail.com');
+        const pepper_index = pepperObj.user_info.findIndex((obj) => obj.email === 'testuser@gmail.com');
+
+        // Remove the object if it exists
+        if (index !== -1 && pepper_index !== -1) {
+            saltObj.user_info.splice(index, 1);
+            pepperObj.user_info.splice(index, 1);
+        }
+        // Write the updated file
+        fs.writeFileSync(saltFileName, JSON.stringify(saltObj));
+        fs.writeFileSync(pepperFileName, JSON.stringify(pepperObj));
+    });
+    //Testing the password store function, should return true
+    it('Testing salt and pepper storage ', async function() {
+        //Create a salt and a pepper
+        const salt =  crypto.randomBytes(16).toString('hex');
+        const pepper = crypto.randomBytes(16).toString('hex');
+        const testSaltData={
+            email:'testuser@gmail.com',
+            salt: salt
+        }
+        const testPepper={
+            email:'testuser@gmail.com',
+            salt: pepper
+        }
+
+       const saltResult = await app.storePasswordInfo(saltFileName, testSaltData)
+        assert.strictEqual(saltResult, true)
+        const pepperResult = app.storePasswordInfo(pepperFileName, testPepper)
+        assert.strictEqual(pepperResult, true)
+    });
+
+
+    //Testing the password store function, should return true
+    it('Testing salt and pepper duplicates', async function() {
+        //Testing with user
+        const salt =  crypto.randomBytes(16).toString('hex');
+        const pepper = crypto.randomBytes(16).toString('hex');
+        const testSaltData={
+            email:'testuser@gmail.com',
+            salt: salt
+        }
+        const testPepper={
+            email:'testuser@gmail.com',
+            salt: pepper
+        }
+        const saltResult = await app.storePasswordInfo(saltFileName, testSaltData)
+        assert.strictEqual(saltResult, false)
+        const pepperResult = app.storePasswordInfo(pepperFileName, testPepper)
+        assert.strictEqual(pepperResult, false)
+    });
+
 
 })
 

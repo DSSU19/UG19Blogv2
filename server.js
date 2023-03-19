@@ -2,8 +2,10 @@ const express = require('express');
 require('dotenv').config({path:'info.env'});
 const https = require('https');
 const bodyParser = require('body-parser');
+const nodemailer = require("nodemailer");
 const fs = require('fs');
 const ejs = require('ejs');
+const crypto = require('crypto');
 
 
 const app = express();
@@ -33,6 +35,18 @@ const pool = new Pool({
     password:  process.env.password,
 });
 
+//Transporter for sending emails:
+// create reusable transporter object using the default SMTP transport
+let transporter = nodemailer.createTransport({
+    host: process.env.email_host,
+    port: process.env.email_port,
+    secure: process.env.email_secure, // true for 465, false for other ports
+    auth: {
+        user: process.env.email_user, // generated ethereal user
+        pass: process.env.email_pass, // generated ethereal password
+    },
+});
+
 
 //This is to get the server running
 const options = {
@@ -47,7 +61,7 @@ server.listen(port, () => {
 
 
 module.exports = {
-    app,signUpValidation, escapeAllInput, userExistsCheck
+    app,signUpValidation, escapeAllInput, userExistsCheck, storePasswordInfo,
 };
 /*All functions used*/
 
@@ -96,7 +110,7 @@ function escapeAllInput(reqBody){
 }
 
 //function to check if the  user already exists (must be a verified user)
-function userExistsCheck(email){
+ function userExistsCheck(email){
     return new Promise((resolve, reject) => {
         //console.log('Exists function is executed');
         const userSelectQuery = {
@@ -105,7 +119,7 @@ function userExistsCheck(email){
         };
         pool.query(userSelectQuery)
             .then((result) => {
-                console.log(result.rows[0])
+                //console.log(result.rows[0])
                 if (result.rows.length > 0) {
                     //console.log("User exists");
                     resolve(true);
@@ -116,9 +130,69 @@ function userExistsCheck(email){
             })
             .catch((err) => {
                 console.log("The error is:" + err)
-                reject("There was an error during the sign-up process. Please refresh and try again");
             });
     });
+}
+
+//function store the password salt and pepper information
+async function storePasswordInfo(filename, passwordData) {
+    try {
+        const data = await fs.promises.readFile(filename, 'utf8');
+        const obj = JSON.parse(data);
+        const userStorageCheck = obj.user_info.find(u => u.email === passwordData.email);
+        if (!userStorageCheck) {
+            console.log("user does not exist");
+            obj.user_info.push(passwordData);
+            const user_json = JSON.stringify(obj, null, 4);
+            await fs.promises.writeFile(filename, user_json, 'utf8');
+            console.log('Saved!');
+            return true;
+        } else {
+            return false;
+        }
+    } catch (err) {
+        console.log(err);
+        return false;
+    }
+}
+
+async function hashPassword(password, email){
+    const pepperFileName = process.env.NODE_ENV === "test" ? 'test/info/test_pepper.json': 'info/pepper.json';
+    const saltFileName = process.env.NODE_ENV === "test" ? 'test/info/test_salt.json': 'info/salts.json';
+    //Create a salt and a pepper
+    const salt =  crypto.randomBytes(16).toString('hex');
+    const pepper = crypto.randomBytes(16).toString('hex');
+    //Store the salt and pepper:
+    const storeSalt = await storePasswordInfo(saltFileName,{email:email, salt:salt})
+    const storePepper =  await storePasswordInfo(pepperFileName,{email:email, pepper:pepper})
+    if(storeSalt && storePepper){
+        //Add the salt and the pepper to the password:
+        const saltedAndPepperPassword = password + salt+pepper;
+        const hashedPassword = crypto.createHash('sha256').update(saltedAndPepperPassword).digest('hex');
+        return hashedPassword
+    }else{
+        return false
+    }
+}
+
+async function sendVerificationEmail(email, token,res) {
+    // Construct the verification link
+    const verificationLink = `https://localhost:8080/verify?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`;
+    // send mail with defined transport object
+    // Construct the email message
+    const message = await transporter.sendMail({
+        from: 'webabenablogtest@gmail.com',
+        to: email,
+        subject: 'Verify your email address',
+        text: `Please click the following link to verify your email address: ${verificationLink}`,
+        html: `Please click <a href="${verificationLink}">here</a> to verify your email address.`
+    });
+    console.log("Message sent: %s", message.messageId);
+    // Message sent: <b658f8ca-6296-ccf4-8306-87d57a0b4321@example.com>
+    // Preview only available when sending through an Ethereal account
+    console.log("Preview URL: %s", nodemailer.getTestMessageUrl(message));
+    // Preview URL: https://ethereal.email/message/WaQKMgKddxQDoou...
+    return res.render("email-verification", { email: email});
 }
 
 
@@ -164,12 +238,47 @@ app.get('/email-verification', (req,res)=>{
 })
 
 
+app.get('/verify', async (req, res) => {
+    console.log('this got triggered')
+    // Extract the email and token from the URL query string
+    const email = req.query.email;
+    const token = req.query.token;
+    const currentTime = Date.now()
+    //this value is for testing
+    //const fiveMinutesInMilliseconds = 5 * 60 * 1000;
+    const timeDifference = 24 * 60 * 60 * 1000;
+    //Check if the token in the link is correct as the one in the database
+    const tokenQuery = {
+        text: 'SELECT verificationtoken FROM users WHERE email = $1 AND $2 - creationtime < $3',
+        values: [email, currentTime, timeDifference] // 24 hours in milliseconds
+    };
+    pool.query(tokenQuery, (err, result) => {
+        if (err) {
+            console.log(err);
+        } else {
+            if (result.rows.length > 0 && token=== result.rows[0].verificationtoken) {
+                const updateQuery = {
+                    text: 'UPDATE users SET isverified = $1 WHERE email = $2 AND verificationtoken = $3',
+                    values: [true, email, token],
+                };
+                pool.query(updateQuery)
+                    .then(()=>{
+                        res.render('/', {message: 'Your account has been verified', errors: false})
+                    }).catch(err=>console.log(err));
+            }else{
+                return res.render('verificationError')
+            }
+        }
+    })
+})
+
+
 
 
 
 
 /*All the application post routes*/
-app.post('/sign-up', (req,res)=>{
+app.post('/sign-up',  (req,res)=>{
     if(signUpValidation(req.body).isValid){
 
         const escapedReqBody = escapeAllInput(req.body)
@@ -178,21 +287,41 @@ app.post('/sign-up', (req,res)=>{
         const username = escapedReqBody.username;
         //Check if the user already exists in the system:
 
-        userExistsCheck(email).then((userExists) => {
+        userExistsCheck(email).then(async (userExists) => {
             if (userExists) {
                 //console.log(res.toString())
                 //Redirect the user to the email verification page in order to prevent account enumeration, but no actual email will be sent to that user
                 //since the user already exists in the system.
                 res.render('email-verification', {email:email})
-
-                // do something
             } else {
                 //If user does not already exists in the password then we can hash the password
-                console.log("User does not exist");
+                //Call the hashedPassword which is a function that generated a random hash.
+                const hashedPassword =  await hashPassword(password, email)
+                console.log(hashedPassword)
+                if(hashedPassword){
+                    //Process with hashed Password has gone well without any errors and thus process can continue.
+                      console.log("Password successfully hashed");
+                    /*
+       // Generate a unique verification token for email verification
+       const token = crypto.randomBytes(20).toString('hex');
+       const creationTime = Date.now();
+       // Insert the new user into the "users" table
+       const query = {
+           text: 'INSERT INTO users (email, password, isverified, verificationtoken, firstname, creationtime) VALUES ($1, $2, $3, $4, $5, $6)',
+           values: [email, hashedPassword, false, token, username, creationTime]
+       };
+       pool.query(query)
+           .then(() => sendVerificationEmail(email, token,res))
+           .catch(err=>console.error(err))*/
+
+                }else{
+                    console.log("Password unsuccessfully hashed");
+                    res.render('sign-up', {errors: "There was an error during the sign-up process, please try again later", message: false})
+
+                }
+
             }
-        });
-
-
+            });
     }else{
         res.render('sign-up', {errors: "There is an error with your input value", message: false})
 
