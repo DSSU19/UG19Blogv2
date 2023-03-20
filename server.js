@@ -67,18 +67,26 @@ module.exports = {
 
 //Sign up validation function:
 function signUpValidation(reqBody){
+
+    const errorMessages = {
+        username: "Username must be alphanumeric",
+        password: "Password must be at least 8 characters long",
+        email: "Please enter a valid email address",
+        passwordConfirmation: "Passwords do not match."
+    };
     const errors = [];
    // const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
     const passwordRegex = /(?=.{8,}$)(?=.*[a-zA-Z0-9]).*/
     const emailRegex = /^([a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9\-\.]+)\.([a-zA-Z]{2,63})$/;
     const usernameRegex= /^[a-z0-9]+$/i;
-
     for (const inputName in reqBody) {
         const input = reqBody[inputName];
         if(!input ||input.length < 1 ||(inputName==="username" && !usernameRegex.test(input)) ||(inputName==="password" && !passwordRegex.test(input))
-            || (inputName ==="email" && !emailRegex.test(input))
+            || (inputName ==="email" && !emailRegex.test(input)) || (inputName==="passwordConfirmation") && input !== reqBody["password"]
         ){
-            errors.push(`There is an error in the "${inputName}" input`);
+            errors.push(errorMessages[inputName]);
+            console.log(errorMessages[inputName]);
+            //errors.push(`There is an error in the "${inputName}" input`);
             console.log(`There is an error in the "${inputName}" input`)
         }
     }
@@ -151,8 +159,17 @@ async function storePasswordInfo(filename, passwordData) {
             return false;
         }
     } catch (err) {
-        console.log(err);
-        return false;
+        if (err.code === 'ENOENT') {
+            console.log('File does not exist. Creating new file...');
+            const user_data = {user_info: [passwordData]};
+            const user_json_stringify = JSON.stringify(user_data, null, 4);
+            await fs.promises.writeFile(filename, user_json_stringify, 'utf8');
+            console.log('Data saved successfully!');
+            return true;
+        } else {
+            console.log(err);
+            return false;
+        }
     }
 }
 
@@ -214,6 +231,10 @@ async function sendVerificationEmail(email, token,res) {
             errors.push(`There is an error in the "${inputName}" input`);
         }
     }
+
+
+
+
     if (errors.length > 0) {
         console.log('Error')
         return { isValid: false, errors };
@@ -236,16 +257,14 @@ app.get('/sign-up', (req, res) => {
 app.get('/email-verification', (req,res)=>{
     res.render('email-verification', {email: email})
 })
-
-
 app.get('/verify', async (req, res) => {
-    console.log('this got triggered')
+    //console.log('this got triggered')
     // Extract the email and token from the URL query string
     const email = req.query.email;
     const token = req.query.token;
     const currentTime = Date.now()
     //this value is for testing
-    //const fiveMinutesInMilliseconds = 5 * 60 * 1000;
+    //const timeDifference = 5 * 60 * 1000;
     const timeDifference = 24 * 60 * 60 * 1000;
     //Check if the token in the link is correct as the one in the database
     const tokenQuery = {
@@ -256,14 +275,17 @@ app.get('/verify', async (req, res) => {
         if (err) {
             console.log(err);
         } else {
+            console.log(result.rows[0].verificationtoken)
             if (result.rows.length > 0 && token=== result.rows[0].verificationtoken) {
+                //Adding an updated token to ensure that the link is a one time click.
+                const updateToken = ""
                 const updateQuery = {
-                    text: 'UPDATE users SET isverified = $1 WHERE email = $2 AND verificationtoken = $3',
-                    values: [true, email, token],
+                    text: 'UPDATE users SET isverified = $1, verificationtoken = $2 WHERE email = $3 AND verificationtoken = $4',
+                    values: [true, updateToken, email, token],
                 };
                 pool.query(updateQuery)
                     .then(()=>{
-                        res.render('/', {message: 'Your account has been verified', errors: false})
+                        res.render('index', {message: 'Your account has been verified', errors: false})
                     }).catch(err=>console.log(err));
             }else{
                 return res.render('verificationError')
@@ -279,11 +301,14 @@ app.get('/verify', async (req, res) => {
 
 /*All the application post routes*/
 app.post('/sign-up',  (req,res)=>{
+
+
     if(signUpValidation(req.body).isValid){
 
         const escapedReqBody = escapeAllInput(req.body)
         const email = escapedReqBody.email;
         const password = escapedReqBody.password;
+        const passwordConfirmation =escapedReqBody.passwordConfirmation;
         const username = escapedReqBody.username;
         //Check if the user already exists in the system:
 
@@ -300,30 +325,26 @@ app.post('/sign-up',  (req,res)=>{
                 console.log(hashedPassword)
                 if(hashedPassword){
                     //Process with hashed Password has gone well without any errors and thus process can continue.
-                      console.log("Password successfully hashed");
-                    /*
-       // Generate a unique verification token for email verification
-       const token = crypto.randomBytes(20).toString('hex');
-       const creationTime = Date.now();
-       // Insert the new user into the "users" table
-       const query = {
-           text: 'INSERT INTO users (email, password, isverified, verificationtoken, firstname, creationtime) VALUES ($1, $2, $3, $4, $5, $6)',
-           values: [email, hashedPassword, false, token, username, creationTime]
-       };
-       pool.query(query)
-           .then(() => sendVerificationEmail(email, token,res))
-           .catch(err=>console.error(err))*/
-
+                    // Generate a unique verification token for email verification
+                   const token = crypto.randomBytes(20).toString('hex');
+                   const creationTime = Date.now();
+                   // Insert the new user into the "users" table
+                   const query = {
+                       text: 'INSERT INTO users (email, password, isverified, verificationtoken, firstname, creationtime) VALUES ($1, $2, $3, $4, $5, $6)',
+                       values: [email, hashedPassword, false, token, username, creationTime]
+                   };
+                   pool.query(query)
+                       .then(() => sendVerificationEmail(email, token,res))
+                       .catch(err=>console.error(err))
                 }else{
                     console.log("Password unsuccessfully hashed");
                     res.render('sign-up', {errors: "There was an error during the sign-up process, please try again later", message: false})
-
                 }
-
             }
             });
     }else{
-        res.render('sign-up', {errors: "There is an error with your input value", message: false})
+        const errors = signUpValidation(req.body).errors;
+        res.render('sign-up', {errors: errors, message: false})
 
     }
 })

@@ -21,6 +21,10 @@
             <label for="password">Password</label><br>
             <input type="password" id="password" name="password" value="" required><br><br>
         </div>
+        <div class="form-input-group">
+            <label for="passwordConfirmation">Confirm your password</label><br>
+            <input type="password" id="passwordConfirmation" name="passwordConfirmation" value="" required><br><br>
+        </div>
 
         <div class="form-input-group">
             <input type="submit" value="Submit">
@@ -32,7 +36,11 @@
         <% } %>
         <% if (errors) { %>
             <div>
-                <%= errors%>
+                <ul>
+                    <% for (var i = 0; i < errors.length; i++) { %>
+                        <li><%= errors[i] %></li>
+                    <% } %>
+                </ul>
             </div>
         <% } %>
     </form>

@@ -2,13 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Title</title>
+    <%- include('partials/head') %>
 </head>
 <body>
-<h1>Email sent</h1>
-<p>Email has been sent to:  <%= email%></p>
-<p>The verification link will only be valid for 24 hours</p>
-
-
+<%- include('partials/homenav') %>
+<div>
+    <h1>Email sent</h1>
+    <p>Email has been sent to:  <%= email%></p>
+    <p>The verification link will only be valid for 24 hours</p>
+</div>
 </body>
 </html>
