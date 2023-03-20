@@ -61,13 +61,13 @@ server.listen(port, () => {
 
 
 module.exports = {
-    app,signUpValidation, escapeAllInput, userExistsCheck, storePasswordInfo,
+    app,signUpValidation, escapeAllInput, userExistsCheck, storePasswordInfo,loginValidation
 };
 /*All functions used*/
 
-//Sign up validation function:
-function signUpValidation(reqBody){
 
+/*Functions for the sign up functionality*/
+function signUpValidation(reqBody){
     const errorMessages = {
         username: "Username must be alphanumeric",
         password: "Password must be at least 8 characters long",
@@ -214,6 +214,23 @@ async function sendVerificationEmail(email, token,res) {
 
 
 
+/*Login functions*/
+//Login valid function
+function loginValidation(reqBody){
+    let isValid = true
+    const passwordRegex = /(?=.{8,}$)(?=.*[a-zA-Z0-9]).*/
+    const emailRegex = /^([a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9\-\.]+)\.([a-zA-Z]{2,63})$/;
+    for (const inputName in reqBody) {
+        const input = reqBody[inputName];
+        if(!input ||input.length < 1 ||(inputName==="password" && !passwordRegex.test(input))
+            || (inputName ==="email" && !emailRegex.test(input)) || (inputName==="passwordConfirmation") && input !== reqBody["password"]
+        ){
+            isValid = false;
+        }
+    }
+    return isValid;
+}
+
 
 
 
@@ -231,10 +248,6 @@ async function sendVerificationEmail(email, token,res) {
             errors.push(`There is an error in the "${inputName}" input`);
         }
     }
-
-
-
-
     if (errors.length > 0) {
         console.log('Error')
         return { isValid: false, errors };
@@ -301,17 +314,13 @@ app.get('/verify', async (req, res) => {
 
 /*All the application post routes*/
 app.post('/sign-up',  (req,res)=>{
-
-
     if(signUpValidation(req.body).isValid){
-
         const escapedReqBody = escapeAllInput(req.body)
         const email = escapedReqBody.email;
         const password = escapedReqBody.password;
         const passwordConfirmation =escapedReqBody.passwordConfirmation;
         const username = escapedReqBody.username;
         //Check if the user already exists in the system:
-
         userExistsCheck(email).then(async (userExists) => {
             if (userExists) {
                 //console.log(res.toString())
@@ -345,6 +354,10 @@ app.post('/sign-up',  (req,res)=>{
     }else{
         const errors = signUpValidation(req.body).errors;
         res.render('sign-up', {errors: errors, message: false})
-
     }
+})
+
+app.post('/login', (req, res)=>{
+
+
 })

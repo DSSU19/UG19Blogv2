@@ -20,7 +20,7 @@ running tests that have to deal with queries update, insert, delete.
 
 //NODE_ENV=test mocha
 
-describe('validateInputs', function() {
+describe('validateSignUpInputs', function() {
     //Testing when the user doesn't put anything in the username,  password, and email
     it('Testing when the user doesn\'t put anything in the username and password', function() {
         //should return an object with isValid equal to false and an array of errors when given invalid inputs
@@ -85,6 +85,15 @@ describe('validateInputs', function() {
         const result = app.signUpValidation(reqBody);
         assert.strictEqual(result.isValid, false);
         assert.strictEqual(result.errors.length, 1);
+    });
+
+    //Testing when the user places an invalid password confiramtion
+    it('Basic SQL Injection Testing', function() {
+        //should return an object with isValid equal to true when given valid inputs
+        const reqBody = {username: "'", password: "'", email: "'", passwordConfirmation: "'"};
+        const result = app.signUpValidation(reqBody);
+        assert.strictEqual(result.isValid, false);
+        assert.strictEqual(result.errors.length, 3);
     });
 
 
