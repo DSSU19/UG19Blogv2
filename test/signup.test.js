@@ -32,7 +32,7 @@ describe('validateSignUpInputs', function() {
     });
 
     //Testing when the user inputs the correct format for the email, password, and username
-    it('Testing when the user inputs the correct format for the email, password, and username', function() {
+    it('Testing when the user inputs valid data for all inputs', function() {
         //should return an object with isValid equal to true when given valid inputs
         const reqBody = {username: 'AbbyAmmo', password: 'seates123', email: 'abbyammo13@gmail.com', passwordConfirmation: 'seates123'};
         const result = app.signUpValidation(reqBody);
@@ -41,7 +41,7 @@ describe('validateSignUpInputs', function() {
     });
 
     //Testing when the user inputs the incorrect email
-    it('Testing incorrect email', function() {
+    it('Testing invalid email', function() {
         //should return an object with isValid false to true when given invalid inputs
         const reqBody = {username: 'AbbyAmmo', password: 'seates123', passwordConfirmation: 'seates123', email: 'abbyammo13heates'};
         const result = app.signUpValidation(reqBody);
