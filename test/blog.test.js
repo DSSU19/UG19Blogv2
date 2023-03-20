@@ -77,6 +77,17 @@ describe('validateInputs', function() {
         assert.equal(result.errors.length, 1);
     });
 
+
+    //Testing when the user places an invalid password confiramtion
+    it('Testing when the user places an invalid password confiramtion', function() {
+        //should return an object with isValid equal to true when given valid inputs
+        const reqBody = {username: 'AbbyAmmo', password: 'seates123', email: 'abbyammo13@gmail.com', passwordConfirmation: 'seates12'};
+        const result = app.signUpValidation(reqBody);
+        assert.strictEqual(result.isValid, false);
+        assert.strictEqual(result.errors.length, 1);
+    });
+
+
     //Testing when the user inputs XSS Script attacks:
     it('Testing XSS Script Attack in inputs', function() {
         //should return an object with isValid equal to false when given invalid inputs
