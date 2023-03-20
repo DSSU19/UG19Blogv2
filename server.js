@@ -85,9 +85,9 @@ function signUpValidation(reqBody){
             || (inputName ==="email" && !emailRegex.test(input)) || (inputName==="passwordConfirmation") && input !== reqBody["password"]
         ){
             errors.push(errorMessages[inputName]);
-            console.log(errorMessages[inputName]);
+            //console.log(errorMessages[inputName]);
             //errors.push(`There is an error in the "${inputName}" input`);
-            console.log(`There is an error in the "${inputName}" input`)
+            //console.log(`There is an error in the "${inputName}" input`)
         }
     }
     if (errors.length > 0) {
