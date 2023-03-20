@@ -358,6 +358,14 @@ app.post('/sign-up',  (req,res)=>{
 })
 
 app.post('/login', (req, res)=>{
+    if(loginValidation(req.body)){
+        const escapedLoginBody= escapeAllInput(req.body);
+        const email = escapedLoginBody.email;
+        const password = escapedLoginBody.password;
+        console.log(email,password)
 
+    }else{
+        res.render('index', {errors: "Username and/or password is incorrect", message: false})
+    }
 
 })
