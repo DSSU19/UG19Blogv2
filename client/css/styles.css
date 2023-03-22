@@ -15,7 +15,38 @@ body{
 }
 
 
+.navBar{
+    display: flex;
+    align-items: center;
+    background-color: beige;
+}
+
+.navBar_with_logo{
+    display: flex;
+}
+
+
 
 .form-design{
     box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+}
+
+.blog-card{
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+}
+
+.blogs-container{
+    display: flex;
+    justify-content: space-around;
+    flex-wrap: wrap;
+}
+
+.blog_buttons_forms{
+    display: flex;
+    justify-content: flex-start;
+    gap:20px;
+    padding: 3%;
+
 }

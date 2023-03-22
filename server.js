@@ -434,7 +434,7 @@ app.get('/blogDashboard', (req, res)=>{
     }else{
         //Get all the blog posts from the database:
         const getAllPostQuery = {
-            text: 'SELECT * FROM blogdata ORDER BY datecreated DESC ',
+            text: 'SELECT * FROM blogdata ORDER BY datecreated ASC ',
         };
         pool.query(getAllPostQuery, (err, result)=>{
             if (err){
@@ -727,7 +727,7 @@ app.post('/editblog/:id', (req, res)=>{
                     const blogPost = result.rows[0]
                     const escapedReqBody = escapeAllInput(req.body)
                     const blogTitle = escapedReqBody.blogtitle;
-                    const blogDescription = escapedReqBody.blogDescription;
+                    const blogDescription = escapedReqBody.blogdescription;
                     const blogInfo = escapedReqBody.bloginfo;
                     console.log(blogInfo, blogDescription, blogTitle)
                     const timeCreated = Date.now().toString();

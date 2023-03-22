@@ -13,7 +13,7 @@
         <p> <b> <%= errors%> </b></p>
     </div>
 <% } %>
-
+<div class="blogs-container">
     <% if (posts && posts.length > 0) { %>
             <% posts.forEach(post => { %>
                 <div class="blog-card">
@@ -36,6 +36,7 @@
 
                 </div>
             <% }) %>
+</div>
 
     <% } else { %>
         <p>No blog posts found.</p>

@@ -1,15 +1,20 @@
 
 <div class="navBar">
-    <h1>Speak your mind</h1>
-    <form action="/logout" method="post">
-        <button type="submit">Sign Out</button>
-    </form>
+    <div card="navBar_with_logo">
+        <h1>Speak your mind</h1>
+        <img src="/images/scream.png" class="scream-image-resize">
+    </div>
+
+
     <div>
         <a href="addBlogPost">Add a blog Post</a>
     </div>
     <form action="/search" method="GET">
         <input type="text" name="search" placeholder="Search...">
         <button type="submit">Search</button>
+    </form>
+    <form action="/logout" method="post">
+        <button type="submit">Sign Out</button>
     </form>
 </div>
 
