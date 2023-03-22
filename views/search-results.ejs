@@ -7,6 +7,11 @@
 <body>
 <%- include('partials/navigation') %>
 <h1>Search Results</h1>
+<% if (errors) { %>
+    <div>
+        <%= errors%>
+    </div>
+<% } %>
 <% if (results.length > 0) { %>
     <% results.forEach(post => { %>
         <%- include('partials/blogPost', {post:post, usermail: usermail}) %>

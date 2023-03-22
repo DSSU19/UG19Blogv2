@@ -80,7 +80,7 @@ server.listen(port, () => {
 
 
 module.exports = {
-    app,signUpValidation, escapeAllInput, userExistsCheck, storePasswordInfo,loginValidation, getPasswordInfo, validateLoginCredentials, TwoFactorEmail
+    app,signUpValidation, escapeAllInput, userExistsCheck, storePasswordInfo,loginValidation, getPasswordInfo, validateLoginCredentials, TwoFactorEmail, searchBarValidation, escapeInput
 };
 /*All functions used*/
 
@@ -131,6 +131,19 @@ function escapeAllInput(reqBody){
     }
     //console.log("This is the escaped version" + JSON.stringify(reqBody));
     return reqBody
+}
+
+function escapeInput(input) {
+    const escapeChars = {
+        '<': '&lt;',
+        '>': '&gt;',
+        '&': '&amp;',
+        '"': '&quot;',
+        "'": '&#39;',
+        '/': '&#x2F;'
+    };
+    const regex = /[<>&"'/]/g;
+    return input.replace(regex, (match) => escapeChars[match]);
 }
 
 //function to check if the  user already exists (must be a verified user)
@@ -368,6 +381,15 @@ function generateCRSFToken(req, res, next) {
     next();
 }
 
+function searchBarValidation(input){
+    const searchRegex =  /^[a-zA-Z0-9\s]+$/;
+    if(!searchRegex.test(input)){
+        return false
+    }else{
+        return true;
+    }
+}
+
 
 
 
@@ -506,25 +528,33 @@ app.get('/readblog/:id', (req, res) => {
 
 app.get('/search', (req, res) => {
     if(req.session.usermail) {
-        const query = escapeAllInput(req.query.search);
-        console.log(query)
-        // Use a prepared statement to avoid SQL injection attacks
+        const query = escapeInput(req.query.search);
+        if(searchBarValidation(query)){
+            console.log(query)
+            // Use a prepared statement to avoid SQL injection attacks
 
-        const likeQuery = {
-            name: 'search-posts',
-            text: 'SELECT * FROM blogdata WHERE blogtitle ILIKE $1 OR bloginfo ILIKE $1 OR blogauthor ILIKE $1 OR blogdescription ILIKE $1',
-            values: [`%${query}%`],
-        };
-        pool.query(likeQuery, (err, result) => {
-            if (err) {
-                console.error('Error executing query', err);
-                return res.status(500).send('An error occurred while searching for posts.');
-            }
-            res.render('search-results', {results: result.rows, usermail: req.session.usermail});
-        });
+            const likeQuery = {
+                name: 'search-posts',
+                text: 'SELECT * FROM blogdata WHERE blogtitle ILIKE $1 OR bloginfo ILIKE $1 OR blogauthor ILIKE $1 OR blogdescription ILIKE $1',
+                values: [`%${query}%`],
+            };
+            pool.query(likeQuery, (err, result) => {
+                if (err) {
+                    console.error('Error executing query', err);
+                    return res.status(500).send('An error occurred while searching for posts.');
+                }
+                res.render('search-results', {results: result.rows, usermail: req.session.usermail, errors: false});
+            });
+        }else{
+            console.log(query)
+            res.render('search-results', {results: 0, usermail: req.session.usermail, errors: "Please try searching something else "});
+
+        }
+
+
 
     }else{
-        res.redirect('/login');
+        res.redirect('/');
     }
 });
 
@@ -700,7 +730,7 @@ app.post('/deleteblog/:id', (req, res)=>{
         })
 
     }else{
-        res.redirect('/login')
+        res.redirect('/')
     }
 })
 
@@ -747,56 +777,61 @@ app.post('/editblog/:id', (req, res)=>{
             return res.render("editBlog", {errors: 'There is an error in your input', firstname: req.session.usermail, post:blogPost});
         }
     }else{
-        res.redirect('/login')
+        res.redirect('/')
     }
 })
 
 
 app.post('/addBlogPost', (req, res)=>{
     //const errors = validationResult(req);
+    if(!req.session.usermail){
+        if(!blogFormDataValidation(req.body)) {
+            //return res.render("addBlogPost", {errors: errors.array(), csrfToken:req.session.token});
+            // console.log("There is an error somewhere here")
+            return res.render("addBlogPost", {errors: 'There is an error in your input', csrfToken:req.session.token});
+        }else{
+            const escapedReqBody = escapeAllInput(req.body)
+            const blogTitle = escapedReqBody.blogTitle
+            const  blogData  = escapedReqBody.blogData
+            const blogDescription = escapedReqBody.blogDescription
+            const timeCreated = Date.now().toString();
+            const dateCreated = new Date(parseInt(timeCreated)).toISOString().slice(0, 10);
+            // Get the CRF token value from the request body
+            const userToken = req.body.csrftokenvalue;
+            // Get the CRF token value from the session variable
+            const serverToken = req.session.token;
+            const author = req.session.usermail;
+            const userIDQuery={
+                text: 'SELECT id FROM users WHERE email = $1',
+                values: [author],  // 24 hours in milliseconds
+            }
 
-    if(!blogFormDataValidation(req.body)) {
-        //return res.render("addBlogPost", {errors: errors.array(), csrfToken:req.session.token});
-       // console.log("There is an error somewhere here")
-        return res.render("addBlogPost", {errors: 'There is an error in your input', csrfToken:req.session.token});
-    }else{
-        const escapedReqBody = escapeAllInput(req.body)
-        const blogTitle = escapedReqBody.blogTitle
-        const  blogData  = escapedReqBody.blogData
-        const blogDescription = escapedReqBody.blogDescription
-        const timeCreated = Date.now().toString();
-        const dateCreated = new Date(parseInt(timeCreated)).toISOString().slice(0, 10);
-        // Get the CRF token value from the request body
-        const userToken = req.body.csrftokenvalue;
-        // Get the CRF token value from the session variable
-        const serverToken = req.session.token;
-        const author = req.session.usermail;
-        const userIDQuery={
-            text: 'SELECT id FROM users WHERE email = $1',
-            values: [author],  // 24 hours in milliseconds
+            pool.query(userIDQuery).then((results)=>{
+                let user_id = results.rows[0].id
+                console.log(user_id)
+                const insertQuery = {
+                    text: 'INSERT INTO blogdata (blogtitle, bloginfo, datecreated, blogDescription, blogauthor, user_id) VALUES ($1, $2, $3, $4, $5, $6)',
+                    values: [blogTitle, blogData, dateCreated, blogDescription, author,user_id]
+                };
+
+                pool.query(insertQuery)
+                    .then((results)=>{
+                        console.log(results.rows)
+                        res.redirect('/blogDashboard')})
+                    .catch(err=>{
+                        console.log(err)
+                        res.render('addBlogPost', {errors: 'There was an error with adding the blog post'})
+                    })
+            }).catch(err=>{
+                console.log(err)
+                res.render('addBlogPost', {errors: 'There was an error with adding the blog post',csrfToken:req.session.token })
+            })
+            console.log(blogTitle);
+            console.log(blogData);
         }
+    }else{
+        res.redirect('/')
 
-        pool.query(userIDQuery).then((results)=>{
-            let user_id = results.rows[0].id
-            console.log(user_id)
-            const insertQuery = {
-                text: 'INSERT INTO blogdata (blogtitle, bloginfo, datecreated, blogDescription, blogauthor, user_id) VALUES ($1, $2, $3, $4, $5, $6)',
-                values: [blogTitle, blogData, dateCreated, blogDescription, author,user_id]
-            };
-
-            pool.query(insertQuery)
-                .then((results)=>{
-                    console.log(results.rows)
-                    res.redirect('/blogDashboard')})
-                .catch(err=>{
-                    console.log(err)
-                    res.render('addBlogPost', {errors: 'There was an error with adding the blog post'})
-                })
-        }).catch(err=>{
-            console.log(err)
-            res.render('addBlogPost', {errors: 'There was an error with adding the blog post',csrfToken:req.session.token })
-        })
-        console.log(blogTitle);
-        console.log(blogData);
     }
+
 })

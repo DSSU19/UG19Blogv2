@@ -38,8 +38,8 @@ body{
 }
 
 .blogs-container{
+    gap:10px 10px;
     display: flex;
-    justify-content: space-around;
     flex-wrap: wrap;
 }
 
@@ -48,5 +48,6 @@ body{
     justify-content: flex-start;
     gap:20px;
     padding: 3%;
+
 
 }
