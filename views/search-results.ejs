@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Search Results</title>
+    <%- include('partials/head') %>
+</head>
+<body>
+<h1>Search Results</h1>
+<% if (results.length > 0) { %>
+    <% results.forEach(post => { %>
+        <%- include('partials/blogPost', {post:post, usermail: usermail}) %>
+    <% }) %>
+
+<% } else { %>
+    <p>No results found.</p>
+<% } %>
+
+<a href="/blogDashboard">Back to dashboard</a>
+</body>
+</html>

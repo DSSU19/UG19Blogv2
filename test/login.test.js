@@ -1,9 +1,11 @@
 const assert = require('assert');
-const request = require('supertest');
+const supertest = require('supertest');
 const app = require('../server.js');
 const nodemailer = require("nodemailer");
+const sinon = require('sinon');
 const crypto = require('crypto');
 const fs = require('fs');
+const request = supertest(app.app)
 
 const { Pool } = require('pg');
 const testPool = new Pool({
@@ -81,7 +83,79 @@ describe('validateLoginInput', function() {
 });
 
 
+describe('getPasswordInfo',   function() {
+    //Testing when the user inputs valid user data.
+    it('User already exists in the system', async function() {
+        const result = await app.getPasswordInfo('testuser2@gmail.com');
+        assert.deepStrictEqual(result, {salt:'d5645ee6a22c2f3981fd80070a172ddf', pepper:'358727ccd1096f85ce3d2c958d958382'});
+    });
+
+    //Testing when the user inputs valid user data.
+    it('User does not exists in the system', async function() {
+        const result = await app.getPasswordInfo('invalidtestuser@gmail.com');
+        assert.strictEqual(result, false);
+    });
+});
 
 
+describe('validateLoginCredentials',   function() {
+    //validUser
+    const validUser = {
+        email: 'wiwib28317@necktai.com',
+        password: 'seates123',
+    };
 
+    const inValidUser = {
+        email: 'lola@gmail.com',
+        password: 'heyaa123',
+    };
 
+    //Testing when the user inputs valid user data.
+    it('User does not exists in the system', async function() {
+        const result = await app.validateLoginCredentials(validUser.password, validUser.email);
+        assert.strictEqual(result, true);
+    });
+    it('User does not exists in the system', async function() {
+        const result = await app.validateLoginCredentials(inValidUser.password, inValidUser.email);
+        assert.strictEqual(result, false);
+    });
+});
+
+/*
+describe('loginPostRoute',   function() {
+ //validUser
+ const validUser = {
+     email: 'wiwib28317@necktai.com',
+     password: 'seates123',
+ };
+
+ const inValidUser = {
+     email: 'lola@gmail.com',
+     password: 'heyaa123',
+ };
+
+ it('Valid user login', done => {
+     const callback = sinon.spy();
+     sinon.replace(app, 'TwoFactorEmail', callback);
+     request.post('/login')
+         .send(validUser)
+         .expect(200)
+         .end((err) => {
+             if (err) return done(err);
+             done();
+         });
+ });
+
+ it('Invalid login', done => {
+     request.post('/login')
+         .send(validUser)
+         .expect.not(200)
+         .expect('Content-Type', /html/)
+         .end((err, res) => {
+             if (err) return done(err);
+             done();
+         });
+ });
+});
+
+ */

@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <%- include('partials/head') %>
+</head>
+<body>
+
+<%- include('partials/navigation') %>
+<h2>Welcome: <%= firstname%></h2>
+<% if (errors) { %>
+    <div>
+        <p> <b> <%= errors%> </b></p>
+    </div>
+<% } %>
+
+    <% if (posts && posts.length > 0) { %>
+            <% posts.forEach(post => { %>
+                <div class="blog-card">
+                    <h2><%= post.blogtitle %></h2>
+                    <p><%= post.datecreated %></p>
+                    <p><%= post.blogdescription %></p>
+                    <div class = "blog_buttons_forms">
+                        <form action="/readblog/<%= post.id %>" method="get">
+                            <button type="submit">Read More</button>
+                        </form>
+                        <% if (post.blogauthor === usermail) { %>
+                            <form action="/editblog/<%= post.id %>" method="get">
+                                <button type="submit">Edit</button>
+                            </form>
+                            <form action="/deleteblog/<%= post.id %>" method="post">
+                                <button type="submit">Delete</button>
+                            </form>
+                        <% } %>
+                    </div>
+
+                </div>
+            <% }) %>
+
+    <% } else { %>
+        <p>No blog posts found.</p>
+    <% } %>
+</body>
+</html>

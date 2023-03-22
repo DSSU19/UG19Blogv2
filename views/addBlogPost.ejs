@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <link rel="stylesheet" href="client/css/styles.css">
+</head>
+<body>
+<form method="post" action="/addBlogPost">
+    <!-- Add the following code to include the CSRF token as a hidden field -->
+    <input type="hidden" name="csrftokenvalue" value="<%= csrfToken %>">
+    <label for="blogTitle">Blog Title</label><br>
+    <input type="text" id="blogTitle" name="blogTitle" value="" required><br>
+    <label for="blogDescription">Blog Descirption</label><br>
+    <input type="text" id="blogDescription" name="blogDescription" value="" required placeholder="Please put brief blog description"><br>
+    <label for="blogData">Blog Data</label><br>
+    <textarea rows="4" cols="50" name="blogData" required>
+Enter all your blog Data here</textarea>
+    <br><br>
+    <input type="submit" value="Submit">
+</form>
+<% if (errors) { %>
+    <div>
+        <p> <b> <%= errors%> </b></p>
+    </div>
+<% } %>
+
+
+</body>
+</html>

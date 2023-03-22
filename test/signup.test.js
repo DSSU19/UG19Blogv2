@@ -1,10 +1,11 @@
 const assert = require('assert');
-const request = require('supertest');
+const supertest = require('supertest');
 const app = require('../server.js');
+const { expect } = require('chai');
+const request = supertest(app.app);
 const nodemailer = require("nodemailer");
 const crypto = require('crypto');
 const fs = require('fs');
-
 const { Pool } = require('pg');
 const testPool = new Pool({
     host: process.env.localhost,
@@ -13,13 +14,32 @@ const testPool = new Pool({
     database: process.env.testDatabase,
     password:  process.env.password,
 });
-
 /*Make sure yoy copy and paste the code below if you are
 running tests that have to deal with queries update, insert, delete.
  */
 
 //NODE_ENV=test mocha
 
+async function deleteUserFromFile(email, saltFileName, pepperFileName){
+    const saltData = await fs.promises.readFile(saltFileName, 'utf8');
+    const saltObj = JSON.parse(saltData);
+    const pepperData = await fs.promises.readFile(pepperFileName, 'utf8');
+    const pepperObj = JSON.parse(pepperData);
+    // Find the index of the object to remove
+    const index = saltObj.user_info.findIndex((obj) => obj.email === 'testuser@gmail.com');
+    const pepper_index = pepperObj.user_info.findIndex((obj) => obj.email === 'testuser@gmail.com');
+
+    // Remove the object if it exists
+    if (index !== -1 && pepper_index !== -1) {
+        console.log('time to remove')
+        saltObj.user_info.splice(index, 1);
+        pepperObj.user_info.splice(index, 1);
+    }
+    // Write the updated file
+    fs.writeFileSync(saltFileName, JSON.stringify(saltObj));
+    fs.writeFileSync(pepperFileName, JSON.stringify(pepperObj));
+
+}
 describe('validateSignUpInputs', function() {
     //Testing when the user doesn't put anything in the username,  password, and email
     it('Testing when the user doesn\'t put anything in the username and password', function() {
@@ -185,49 +205,32 @@ describe('userAlreadyExists', function(){
 
     //User already exists in the database and has already sign-up
     it('Testing when the user already exists in the database ', async function() {
-        const userExists = await app.userExistsCheck('abbyammo13@gmail.com');
+        const userExists = await app.userExistsCheck('wiwib28317@necktai.com');
         assert.strictEqual(userExists, true);
     });
 
 })
 
 describe('passwordStore',  function (){
+    //Create a salt and a pepper
+    const salt =  crypto.randomBytes(16).toString('hex');
+    const pepper = crypto.randomBytes(16).toString('hex');
     const saltFileName= 'test/info/test_salt.json'
     const pepperFileName= 'test/info/test_pepper.json'
+    const testSaltData={
+        email:'testuser@gmail.com',
+        salt: salt
+    }
+    const testPepper={
+        email:'testuser@gmail.com',
+        pepper: pepper
+    }
     before(async function() {
-        // runs before all tests in this file regardless where this line is defined.
-        // Read the JSON file
-        const saltData = await fs.promises.readFile(saltFileName, 'utf8');
-        const saltObj = JSON.parse(saltData);
-        const pepperData = await fs.promises.readFile(pepperFileName, 'utf8');
-        const pepperObj = JSON.parse(pepperData);
-        // Find the index of the object to remove
-        const index = saltObj.user_info.findIndex((obj) => obj.email === 'testuser@gmail.com');
-        const pepper_index = pepperObj.user_info.findIndex((obj) => obj.email === 'testuser@gmail.com');
-
-        // Remove the object if it exists
-        if (index !== -1 && pepper_index !== -1) {
-            saltObj.user_info.splice(index, 1);
-            pepperObj.user_info.splice(index, 1);
-        }
-        // Write the updated file
-        fs.writeFileSync(saltFileName, JSON.stringify(saltObj));
-        fs.writeFileSync(pepperFileName, JSON.stringify(pepperObj));
+        await deleteUserFromFile(testSaltData.email, saltFileName, pepperFileName)
+        // runs before all tests in this file regardless where this line is defined
     });
     //Testing the password store function, should return true
     it('Testing salt and pepper storage ', async function() {
-        //Create a salt and a pepper
-        const salt =  crypto.randomBytes(16).toString('hex');
-        const pepper = crypto.randomBytes(16).toString('hex');
-        const testSaltData={
-            email:'testuser@gmail.com',
-            salt: salt
-        }
-        const testPepper={
-            email:'testuser@gmail.com',
-            salt: pepper
-        }
-
        const saltResult = await app.storePasswordInfo(saltFileName, testSaltData)
         assert.strictEqual(saltResult, true)
         const pepperResult = await app.storePasswordInfo(pepperFileName, testPepper)
@@ -240,14 +243,6 @@ describe('passwordStore',  function (){
         //Testing with user
         const salt =  crypto.randomBytes(16).toString('hex');
         const pepper = crypto.randomBytes(16).toString('hex');
-        const testSaltData={
-            email:'testuser@gmail.com',
-            salt: salt
-        }
-        const testPepper={
-            email:'testuser@gmail.com',
-            salt: pepper
-        }
         const saltResult = await app.storePasswordInfo(saltFileName, testSaltData)
         assert.strictEqual(saltResult, false)
         const pepperResult =await  app.storePasswordInfo(pepperFileName, testPepper)
@@ -258,6 +253,40 @@ describe('passwordStore',  function (){
 })
 
 
+
+/*
+describe('POST /sign-up', () => {
+    const testUserData = {
+        email: 'wiwib28317@necktai.com',
+        password: 'seates123',
+        passwordConfirmation: 'seates123',
+        username: 'testuser'
+    };
+
+/*    before(async function() {
+        const saltFileName= 'test/info/test_salt.json'
+        const pepperFileName= 'test/info/test_pepper.json'
+        await deleteUserFromFile(testUserData.email, saltFileName, pepperFileName)
+        const deleteUserQuery = {
+            text: 'DELETE FROM users WHERE email = $1',
+            values: [testUserData.email]
+        };
+        await testPool.query(deleteUserQuery).then(console.log('done'));
+    })
+    it('Valid user sign-up', done => {
+        request.post('/sign-up')
+            .send(testUserData)
+            .expect(200)
+            .expect('Content-Type', /html/)
+            .end((err, res) => {
+                if (err) return done(err);
+                assert.strictEqual(app.signUpValidation(testUserData).isValid, true);
+                done();
+            });
+    });
+});
+
+*/
 
 
 

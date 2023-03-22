@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <%- include('partials/head') %>
+</head>
+<body>
+
+<%- include('partials/navigation') %>
+<h2>Welcome: <%= firstname%></h2>
+<% if (errors) { %>
+    <div>
+        <p> <b> <%= errors%> </b></p>
+    </div>
+<% } %>
+<div>
+    <form action="/editblog/<%= post.id %>" method="post">
+        <label for="blogtitle">Title:</label>
+        <input type="text" id="blogtitle" name="blogtitle" value="<%= post.blogtitle %>">
+
+        <label for="blogdescription">Description:</label>
+        <textarea id="blogdescription" name="blogdescription"><%= post.blogdescription %></textarea>
+
+        <label for="bloginfo">Info:</label>
+        <textarea id="bloginfo" name="bloginfo"><%= post.bloginfo %></textarea>
+
+        <button type="submit">Update</button>
+    </form>
+</div>
+<a href="/blogDashboard">Back to dashboard</a>
+
+</body>
+</html>

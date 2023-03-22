@@ -1,0 +1,18 @@
+<div class="blog-card">
+    <h2><%= post.blogtitle %></h2>
+    <p><%= post.datecreated %></p>
+    <p><%= post.blogdescription %></p>
+    <div class = "blog_buttons_forms">
+        <form action="/readblog/<%= post.id %>" method="get">
+            <button type="submit">Read More</button>
+        </form>
+        <% if (post.blogauthor === usermail) { %>
+            <form action="/editblog/<%= post.id %>" method="get">
+                <button type="submit">Edit</button>
+            </form>
+            <form action="/deleteblog/<%= post.id %>" method="post">
+                <button type="submit">Delete</button>
+            </form>
+        <% } %>
+    </div>
+</div>

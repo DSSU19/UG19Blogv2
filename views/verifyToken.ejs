@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <%- include('partials/head') %>
+</head>
+<body>
+
+<%- include('partials/homenav') %>
+<h1>Two Factor Authentication</h1>
+<form action="/twofa" method="post">
+    <% if (email) { %>
+    <input type="hidden" id="email" name="email" autocomplete="off" value="<%=email%>" >
+        <% } %>
+    <label for="verificationtoken">Enter your 6-digit verification code:</label>
+    <input type="number" id="verificationtoken" name="verificationtoken" pattern="\d{6}" maxlength="6" autocomplete="off" required>
+    <% if (message) { %>
+        <div>
+            <p>A one time password has been to: <b> <%= message%> </b></p>
+            <p>Your code will only be valid for 5 minutes</p>
+        </div>
+    <% } %>
+
+
+    <% if (errors) { %>
+        <div>
+            <p> <b> <%= errors%> </b></p>
+        </div>
+    <% } %>
+    <input type="submit" value="Submit">
+</form>
+</body>
+</html>

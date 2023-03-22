@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Title</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+<%- include('partials/navigation') %>
+
+<h2>Welcome: <%= firstname%></h2>
+<% if (errors) { %>
+    <div>
+        <p> <b> <%= errors%> </b></p>
+    </div>
+<% } %>
+<div class="blogPost">
+    <h2><%= post.blogtitle %></h2>
+    <p class="date"><%= post.datecreated %></p>
+    <p><%= post.blogdescription %></p>
+    <p><%= post.bloginfo%></p>
+    <a href="/blogDashboard">Back to dashboard</a>
+</div>
+
+
+</body>
+</html>
