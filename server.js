@@ -358,8 +358,6 @@ async function TwoFactorEmail(email, token,res) {
     }
 }
 
-
-
 // Create a middleware function to generate and store a CRF token
 function generateCRSFToken(req, res, next) {
     // Generate a random token using crypto module
@@ -611,7 +609,6 @@ app.post('/login', async (req, res)=>{
             //Two factor Authentication.
             await TwoFactorEmail(email, token, res)
         }else{
-            res.send()
             res.render('index', {errors: "Username and/or password is incorrect", message: false})
         }
         console.log(email,password)
