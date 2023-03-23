@@ -26,19 +26,32 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 app.use(session({
     secret: process.env.secret_key,
-    genid: (req) => {
+    /*
+     genid: (req) => {
         return uuid(); // use UUIDs for session IDs
+    },
+
+     */
+    genid : function (req){
+        return  crypto.randomBytes(16).toString('hex');
     },
     resave: false,
     saveUninitialized: true,
     cookie: {
         secure: true,
         httpOnly:true,
-        maxAge: 24 * 60 * 60 * 1000, // 1 day
+        //maxAge: 24 * 60 * 60 * 1000, // 1 day
         sameSite: 'lax',
     }
-
 }));
+
+//Testing middleware
+/*
+app.use((req, res, next) => {
+    console.log('Time:', Date.now())
+    next()
+})
+*/
 
 
 //Pg client information to enable queries from the database blog.
@@ -180,7 +193,7 @@ async function storePasswordInfo(filename, passwordData) {
         const obj = JSON.parse(data);
         const userStorageCheck = obj.user_info.find(u => u.email === passwordData.email);
         if (!userStorageCheck) {
-            console.log("user does not exist");
+            //console.log("user does not exist");
             obj.user_info.push(passwordData);
             const user_json = JSON.stringify(obj, null, 4);
             await fs.promises.writeFile(filename, user_json, 'utf8');
@@ -195,7 +208,7 @@ async function storePasswordInfo(filename, passwordData) {
             const user_data = {user_info: [passwordData]};
             const user_json_stringify = JSON.stringify(user_data, null, 4);
             await fs.promises.writeFile(filename, user_json_stringify, 'utf8');
-            console.log('Data saved successfully!');
+           // console.log('Data saved successfully!');
             return true;
         } else {
             console.log(err);
@@ -276,8 +289,8 @@ async function getPasswordInfo(email) {
         const pepperObj = JSON.parse(pepperData);
         //console.log(JSON.stringify(pepperObj));
         const userPepper= pepperObj.user_info.find(u => u.email === email);
-        console.log("The pepper: " + JSON.stringify(userPepper))
-        console.log("The salt: " + JSON.stringify(userSalt))
+        //console.log("The pepper: " + JSON.stringify(userPepper))
+        //console.log("The salt: " + JSON.stringify(userSalt))
         if(userPepper && userSalt){
             //console.log('gets here')
             return {salt: userSalt.salt, pepper: userPepper.pepper};
@@ -300,14 +313,14 @@ async function validateLoginCredentials(password, email){
         const saltedAndPepperedPassword = password + passwordInfo.salt + passwordInfo.pepper;
         //console.log(saltedAndPepperedPassword)
         const hashedPassword = crypto.createHash('sha256').update(saltedAndPepperedPassword).digest('hex');
-        console.log(hashedPassword)
+        //console.log(hashedPassword)
         const userQuery = {
             text: 'SELECT email, password FROM users WHERE email = $1 AND password =$2 AND isverified =$3',
             values: [email, hashedPassword, true] // 24 hours in milliseconds
         };
         try {
             const result = await pool.query(userQuery);
-            console.log(result.rows[0])
+            //console.log(result.rows[0])
             if(result.rows.length > 0){
                 return true;
             }else{
@@ -333,16 +346,10 @@ async function TwoFactorEmail(email, token,res) {
         text: `This is your one time token: ${token}`,
         html: `This is your token: <b> ${token}</b>`
     });
-    console.log("Message sent: %s", message.messageId);
-    // Message sent: <b658f8ca-6296-ccf4-8306-87d57a0b4321@example.com>
-    // Preview only available when sending through an Ethereal account
-    console.log("Preview URL: %s", nodemailer.getTestMessageUrl(message));
-    // Preview URL: https://ethereal.email/message/WaQKMgKddxQDoou...
+    //console.log("Message sent: %s", message.messageId);
+    //console.log("Preview URL: %s", nodemailer.getTestMessageUrl(message));
     return res.render("verifyToken", { message: email, errors: false, email: email});
 }
-
-
-
 
 
 //Validation input functions
@@ -351,7 +358,6 @@ async function TwoFactorEmail(email, token,res) {
          blogTitle: "There is an invalid input in your blog title",
          blogDescription: "There is an invalid input in your blog description",
          blogData: "There is an invalid input in your blog data",
-
      };
      const errors = [];
      const regex = /^[a-zA-Z0-9\s\.\?\!\,\-]+$/g // regular expression to match letters and punctuations
@@ -416,6 +422,10 @@ function searchBarValidation(input){
     }
 }
 
+function changeCookieAndSession(){
+
+}
+
 
 
 
@@ -423,6 +433,7 @@ function searchBarValidation(input){
 /*All the application get routes*/
 //Routes
 app.get('/', (req, res) => {
+    console.log('Session ID:', req.sessionID);
     res.render('index', {errors: false, message: false})
 });
 
@@ -473,22 +484,24 @@ app.get('/verify', async (req, res) => {
 
 /*Blog gets*/
 app.get('/blogDashboard', (req, res)=>{
+    //Saving
     if(!req.session.usermail){
         //Will be changed to contain name rather than email
         res.redirect('/')
 
     }else{
+        console.log('Session ID:', req.sessionID);
         //Get all the blog posts from the database:
         const getAllPostQuery = {
-            text: 'SELECT * FROM blogdata ORDER BY datecreated ASC ',
+            text: 'SELECT * FROM blogdata ORDER BY datecreated DESC ',
         };
         pool.query(getAllPostQuery, (err, result)=>{
             if (err){
                 console.error(err);
                 res.render('blogDashboard', {firstname: req.session.firstname, errors: "There was an error retrieving the posts", post: '', usermail:req.session.usermail })
-
             }else{
                 const blogPosts = result.rows;
+                //console.log(result.rows[0])
                 //console.log("The posts are " + blogPosts);
                 res.render('blogDashboard', {firstname: req.session.firstname, errors: false, posts: blogPosts, usermail: req.session.usermail })
             }
@@ -513,7 +526,7 @@ app.get('/editblog/:id', (req, res)=>{
         })
 
     }else{
-        res.redirect('/login')
+        res.redirect('/')
 
     }
 })
@@ -547,7 +560,7 @@ app.get('/readblog/:id', (req, res) => {
             }
         });
     }else{
-        res.redirect('/login')
+        res.redirect('/')
     }
 
 });
@@ -574,11 +587,7 @@ app.get('/search', (req, res) => {
         }else{
             console.log(query)
             res.render('search-results', {results: 0, usermail: req.session.usermail, errors: "Please try searching something else "});
-
         }
-
-
-
     }else{
         res.redirect('/');
     }
@@ -660,15 +669,13 @@ app.post('/login', async (req, res)=>{
                         };
                         pool.query(query)
                     }
-
                 })
             //Two factor Authentication.
             await TwoFactorEmail(email, token, res)
         }else{
             res.render('index', {errors: "Username and/or password is incorrect", message: false})
         }
-        console.log(email,password)
-
+        //console.log(email,password)
     }else{
         res.render('index', {errors: "Username and/or password is incorrect", message: false})
     }
@@ -694,30 +701,33 @@ app.post('/twofa', (req,res)=>{
                text: 'DELETE FROM otps WHERE otp = $1  AND email= $2',
                values: [otp, email] // 24 hours in milliseconds
            };
-
            const nameQuery = {
                text: 'SELECT firstname FROM users WHERE email = $1',
                values: [email],  // 24 hours in milliseconds
-
            }
            pool.query(twofatokenquery).then((result)=>{
                //console.log(result.rows[0]);
                if(result.rows.length > 0){
-                   //Validate the user
-                   req.session.usermail = email;
-                   //Get users name
                    pool.query(nameQuery)
                        .then((results)=>{
-                           console.log(results.rows[0])
-                           req.session.firstname= results.rows[0].firstname;
-                           res.redirect('/blogDashboard');
-                           pool.query(deleteTokenQuery)
+                           //console.log(results.rows[0])
+                           //Set the session firstname
+                          req.session.regenerate((err)=>{
+                               if (err) {
+                                   console.error(err);
+                               }else{
+                                   //Get users email and place it in the session
+                                   req.session.usermail = email;
+                                   req.session.firstname= results.rows[0].firstname;
+                                   res.redirect('/blogDashboard');
+                                   pool.query(deleteTokenQuery)
+                               }
+                           })
                        })
                }else{
                    res.render('verifyToken', {errors:'Invalid token', email:email, message: email})
                }
            })
-
 })
 
 app.post('/logout', (req, res)=> {
@@ -786,7 +796,7 @@ app.post('/editblog/:id', (req, res)=>{
                 //let allData = [blogTitle, blogDescription, blogInfo]
                 let allData = { blogTitle: blogTitle, blogDescription:blogDescription , blogInfo: blogInfo };
 
-                if(validateInputsAll(allData)){
+                if(validateInputsAll(allData).isValid){
                     const updateQuery = {
                         text: 'UPDATE blogData SET blogtitle = $1, bloginfo = $2, datecreated= $3, blogdescription = $4 WHERE id = $5',
                         values: [blogTitle, blogInfo, dateCreated, blogDescription, blogId]
@@ -835,7 +845,7 @@ app.post('/addBlogPost', (req, res)=>{
 
             pool.query(userIDQuery).then((results)=>{
                 let user_id = results.rows[0].id
-                console.log(user_id)
+                //console.log(user_id)
                 const insertQuery = {
                     text: 'INSERT INTO blogdata (blogtitle, bloginfo, datecreated, blogDescription, blogauthor, user_id) VALUES ($1, $2, $3, $4, $5, $6)',
                     values: [blogTitle, blogData, dateCreated, blogDescription, author,user_id]

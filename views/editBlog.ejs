@@ -8,11 +8,6 @@
 
 <%- include('partials/navigation') %>
 <h2>Welcome: <%= firstname%></h2>
-<% if (errors) { %>
-    <div>
-        <p> <b> <%= errors%> </b></p>
-    </div>
-<% } %>
 <div>
     <form action="/editblog/<%= post.id %>" method="post">
         <label for="blogtitle">Title:</label>
@@ -27,6 +22,11 @@
         <button type="submit">Update</button>
     </form>
 </div>
+<% if (errors) { %>
+    <div>
+        <p> <b> <%= errors%> </b></p>
+    </div>
+<% } %>
 <a href="/blogDashboard">Back to dashboard</a>
 
 </body>
