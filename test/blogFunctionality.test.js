@@ -141,6 +141,21 @@ describe('validateSearchInput', function() {
 
 
 
+    it('Accurate Input Test', function() {
+        const blogData={
+            blogTitle:  "Everyone needs a dog",
+            blogDescription: "Doggies need a little love to",
+            blogData: "We love dog, we love dogs, everyday is a dog loving day!!! ",
+        }
+        //should return an object with isValid equal to false and an array of errors when given invalid inputs
+        const result = app.validateInputsAll(blogData);
+        assert.strictEqual(result.isValid, true);
+        assert.strictEqual(result.errors.length, 0);
+
+    });
+
+
+
 
 
 });

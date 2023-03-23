@@ -81,7 +81,7 @@ server.listen(port, () => {
 
 module.exports = {
     app,signUpValidation, escapeAllInput, userExistsCheck, storePasswordInfo,loginValidation, getPasswordInfo, validateLoginCredentials, TwoFactorEmail, searchBarValidation, escapeInput,
-    blogFormDataValidation
+    blogFormDataValidation, validateInputsAll
 };
 /*All functions used*/
 
@@ -376,13 +376,15 @@ async function TwoFactorEmail(email, token,res) {
 
 function validateInputsAll(reqBody) {
     const errors = [];
-    const regex = /^[a-zA-Z,.!?'"()\s]+$/; // regular expression to match letters and punctuations
+    const regex = /^[a-zA-Z0-9?!,.\\s]+$/
+    //const regex = /^[a-zA-Z0-9\s\.\?\!\,\-]+$/g // regular expression to match letters and punctuations
+    //const regex = /^[a-zA-Z,.!?'"()\s]+$/; // regular expression to match letters and punctuations
 
     for (const inputName in reqBody) {
         const input = reqBody[inputName];
         console.log("Length is " + input.length)
         console.log("The input is: " + input);
-        if (!regex.test(input) || !input || input.length < 1) {
+        if (!input || input.length < 1) {
             errors.push(`There is an error in the "${inputName}" input`);
         }
     }
@@ -784,9 +786,7 @@ app.post('/editblog/:id', (req, res)=>{
                 //let allData = [blogTitle, blogDescription, blogInfo]
                 let allData = { blogTitle: blogTitle, blogDescription:blogDescription , blogInfo: blogInfo };
 
-                if(!validateInputsAll(allData)){
-                    return res.render("editBlog", {errors: 'There is an error in your input', firstname: req.session.usermail, post:blogPost});
-                }else{
+                if(validateInputsAll(allData)){
                     const updateQuery = {
                         text: 'UPDATE blogData SET blogtitle = $1, bloginfo = $2, datecreated= $3, blogdescription = $4 WHERE id = $5',
                         values: [blogTitle, blogInfo, dateCreated, blogDescription, blogId]
@@ -795,8 +795,11 @@ app.post('/editblog/:id', (req, res)=>{
                         res.redirect('/blogDashboard')
                     }).catch((err)=>{
                         console.log(err)
-                        return res.render("editBlog", {errors: 'There was an error when trying to edit your blog', firstname: req.session.usermail, post:blogPost});
+                        return res.render("editBlog", {errors: 'There was an error when trying to edit your blog', firstname: req.session.firstname, post:blogPost});
                     })
+                }else{
+                    return res.render("editBlog", {errors: 'There is an error in your input', firstname: req.session.firstname, post:blogPost});
+
                 }
             }
         })
