@@ -35,6 +35,8 @@ body{
     display: flex;
     flex-direction: column;
     box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+    padding: 2%;
+    width: 300px;
 }
 
 .blogs-container{
@@ -49,5 +51,18 @@ body{
     gap:20px;
     padding: 3%;
 
-
 }
+
+.blogs_forms{
+    box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+    display: flex;
+    flex-direction: column;
+    margin: 5%;
+}
+
+.input_group{
+    display: flex;
+    flex-direction: row;
+    padding: 2%;
+}
+

@@ -80,7 +80,8 @@ server.listen(port, () => {
 
 
 module.exports = {
-    app,signUpValidation, escapeAllInput, userExistsCheck, storePasswordInfo,loginValidation, getPasswordInfo, validateLoginCredentials, TwoFactorEmail, searchBarValidation, escapeInput
+    app,signUpValidation, escapeAllInput, userExistsCheck, storePasswordInfo,loginValidation, getPasswordInfo, validateLoginCredentials, TwoFactorEmail, searchBarValidation, escapeInput,
+    blogFormDataValidation
 };
 /*All functions used*/
 
@@ -349,17 +350,18 @@ async function TwoFactorEmail(email, token,res) {
      const errorMessages = {
          blogTitle: "There is an invalid input in your blog title",
          blogDescription: "There is an invalid input in your blog description",
-         blogData: "There is an invalid input in your blog dataa",
+         blogData: "There is an invalid input in your blog data",
 
      };
      const errors = [];
-     const regex = /^[a-zA-Z0-9\s\.\?\!]+$/g// regular expression to match letters and punctuations
+     const regex = /^[a-zA-Z0-9\s\.\?\!\,\-]+$/g // regular expression to match letters and punctuations
     for (const inputName in reqBody) {
         const input = reqBody[inputName];
+        console.log("The input is : " + input)
         //console.log("Length is " + input.length)
         //console.log("The input is: " + input);
         if (!regex.test(input) || !input || input.length < 1 ) {
-            console.log("The input is" + input)
+            console.log("The error is in: "+ input)
             errors.push(errorMessages[inputName]);
         }
     }
@@ -370,6 +372,28 @@ async function TwoFactorEmail(email, token,res) {
         return { isValid: true };
     }
 }
+
+
+function validateInputsAll(reqBody) {
+    const errors = [];
+    const regex = /^[a-zA-Z,.!?'"()\s]+$/; // regular expression to match letters and punctuations
+
+    for (const inputName in reqBody) {
+        const input = reqBody[inputName];
+        console.log("Length is " + input.length)
+        console.log("The input is: " + input);
+        if (!regex.test(input) || !input || input.length < 1) {
+            errors.push(`There is an error in the "${inputName}" input`);
+        }
+    }
+    if (errors.length > 0) {
+        console.log('Error')
+        return { isValid: false, errors };
+    } else {
+        return { isValid: true };
+    }
+}
+
 
 // Create a middleware function to generate and store a CRF token
 function generateCRSFToken(req, res, next) {
@@ -463,7 +487,7 @@ app.get('/blogDashboard', (req, res)=>{
 
             }else{
                 const blogPosts = result.rows;
-                console.log("The posts are " + blogPosts);
+                //console.log("The posts are " + blogPosts);
                 res.render('blogDashboard', {firstname: req.session.firstname, errors: false, posts: blogPosts, usermail: req.session.usermail })
             }
         })
@@ -479,10 +503,10 @@ app.get('/editblog/:id', (req, res)=>{
         };
         pool.query(getBlogPostQuery, (err, result)=>{
             if(err){
-                res.render('editBlog', {errors: 'There was an error with updating the blog', post: '', firstname: req.session.usermail})
+                res.render('editBlog', {errors: 'There was an error with updating the blog', post: '', firstname: req.session.firstname})
             }else{
                 const blogPost = result.rows[0]
-                res.render('editBlog', {errors: false, post: blogPost, firstname: req.session.usermail })
+                res.render('editBlog', {errors: false, post: blogPost, firstname: req.session.firstname })
             }
         })
 
@@ -739,43 +763,43 @@ app.post('/deleteblog/:id', (req, res)=>{
 
 app.post('/editblog/:id', (req, res)=>{
     if(req.session.usermail){
-        if(blogFormDataValidation(req.body)){
-            const blogId = req.params.id;
-            const getBlogPostQuery = {
-                text: 'SELECT * FROM blogData WHERE id = $1',
-                values: [blogId]
-            };
-            pool.query(getBlogPostQuery,(err, result)=>{
-                if(err){
-                    res.render('editBlog', {errors: 'There was an error with updating the blog', post: '', firstname: req.session.usermail})
+        const blogId = req.params.id;
+        const getBlogPostQuery = {
+            text: 'SELECT * FROM blogData WHERE id = $1',
+            values: [blogId]
+        };
 
+        pool.query(getBlogPostQuery,(err, result)=>{
+            if(err){
+                res.render('editBlog', {errors: 'There was an error with updating the blog', post: '', firstname: req.session.usermail})
+
+            }else{
+                const blogPost = result.rows[0]
+                const blogTitle = escapeInput(req.body.blogtitle);
+                const blogDescription = escapeInput(req.body.blogdescription);
+                const blogInfo = escapeInput(req.body.bloginfo);
+                //console.log(blogInfo, blogDescription, blogTitle)
+                const timeCreated = Date.now().toString();
+                const dateCreated = new Date(parseInt(timeCreated)).toISOString().slice(0, 10);
+                //let allData = [blogTitle, blogDescription, blogInfo]
+                let allData = { blogTitle: blogTitle, blogDescription:blogDescription , blogInfo: blogInfo };
+
+                if(!validateInputsAll(allData)){
+                    return res.render("editBlog", {errors: 'There is an error in your input', firstname: req.session.usermail, post:blogPost});
                 }else{
-
-                    const blogPost = result.rows[0]
-                    const escapedReqBody = escapeAllInput(req.body)
-                    const blogTitle = escapedReqBody.blogtitle;
-                    const blogDescription = escapedReqBody.blogdescription;
-                    const blogInfo = escapedReqBody.bloginfo;
-                    console.log(blogInfo, blogDescription, blogTitle)
-                    const timeCreated = Date.now().toString();
-                    const dateCreated = new Date(parseInt(timeCreated)).toISOString().slice(0, 10);
-                    //let allData = [blogTitle, blogDescription, blogInfo]
-                    let allData = { blogTitle: blogTitle, blogDescription:blogDescription , blogInfo: blogInfo };
-                        const updateQuery = {
-                            text: 'UPDATE blogData SET blogtitle = $1, bloginfo = $2, datecreated= $3, blogdescription = $4 WHERE id = $5',
-                            values: [blogTitle, blogInfo, dateCreated, blogDescription, blogId]
-                        };
-                        pool.query(updateQuery).then((result)=>{
-                            res.redirect('/blogDashboard')
-                        }).catch((err)=>{
-                            console.log(err)
-                            return res.render("editBlog", {errors: 'There was an error when trying to edit your blog', firstname: req.session.usermail, post:blogPost});
-                        })
+                    const updateQuery = {
+                        text: 'UPDATE blogData SET blogtitle = $1, bloginfo = $2, datecreated= $3, blogdescription = $4 WHERE id = $5',
+                        values: [blogTitle, blogInfo, dateCreated, blogDescription, blogId]
+                    };
+                    pool.query(updateQuery).then((result)=>{
+                        res.redirect('/blogDashboard')
+                    }).catch((err)=>{
+                        console.log(err)
+                        return res.render("editBlog", {errors: 'There was an error when trying to edit your blog', firstname: req.session.usermail, post:blogPost});
+                    })
                 }
-            })
-        }else{
-            return res.render("editBlog", {errors: 'There is an error in your input', firstname: req.session.usermail, post:blogPost});
-        }
+            }
+        })
     }else{
         res.redirect('/')
     }
@@ -784,7 +808,7 @@ app.post('/editblog/:id', (req, res)=>{
 
 app.post('/addBlogPost', (req, res)=>{
     //const errors = validationResult(req);
-    if(!req.session.usermail){
+    if(req.session.usermail){
         if(!blogFormDataValidation(req.body)) {
             //return res.render("addBlogPost", {errors: errors.array(), csrfToken:req.session.token});
             // console.log("There is an error somewhere here")

@@ -73,6 +73,72 @@ describe('validateSearchInput', function() {
         const result = app.escapeInput(searchInput)
         assert.notStrictEqual(searchInput,result)
     });
+    it('Add Blog Posts SQL Injection', function() {
+        const blogData={
+            blogTitle: '‘ order by username --',
+            blogDescription: "'‘ order by username --'",
+            blogData: "There is an invalid input in your blog dataa",
+        }
+        //should return an object with isValid equal to false and an array of errors when given invalid inputs
+        const result = app.blogFormDataValidation(blogData);
+        assert.strictEqual(result.isValid, false);
+        assert.strictEqual(result.errors.length, 2);
+
+
+    });
+
+    it('Add Blog Posts SQL Injection 2', function() {
+        const blogData={
+            blogTitle: ' \' union all select name from users --',
+            blogDescription: "'‘ order by username --'",
+            blogData: "There is an invalid input in your blog dataa",
+        }
+        //should return an object with isValid equal to false and an array of errors when given invalid inputs
+        const result = app.blogFormDataValidation(blogData);
+        assert.strictEqual(result.isValid, false);
+        assert.strictEqual(result.errors.length, 2);
+
+    });
+
+    it('Add Blog Posts SQL Injection 3', function() {
+        const blogData={
+            blogTitle: ' \' union all select name from users --',
+            blogDescription: "'‘ order by username --'",
+            blogData: "hrichard' union all select name from 'users' where username = 'hrichard' –",
+        }
+        //should return an object with isValid equal to false and an array of errors when given invalid inputs
+        const result = app.blogFormDataValidation(blogData);
+        assert.strictEqual(result.isValid, false);
+        assert.strictEqual(result.errors.length, 3);
+
+    });
+
+    it('Cross Site Scripting', function() {
+        const blogData={
+            blogTitle:  '<script>alert("Hello World");</script>',
+            blogDescription: '<script>alert("Hello World");</script>',
+            blogData: "Javascript is changing the world. ",
+        }
+        //should return an object with isValid equal to false and an array of errors when given invalid inputs
+        const result = app.blogFormDataValidation(blogData);
+        assert.strictEqual(result.isValid, false);
+        assert.strictEqual(result.errors.length, 2);
+
+    });
+
+    it('Accurate Input Test', function() {
+        const blogData={
+            blogTitle:  "Everyone needs a dog",
+            blogDescription: "Doggies need a little love to",
+            blogData: "We love dog, we love dogs, everyday is a dog loving day!!! ",
+        }
+        //should return an object with isValid equal to false and an array of errors when given invalid inputs
+        const result = app.blogFormDataValidation(blogData);
+        assert.strictEqual(result.isValid, true);
+        assert.strictEqual(result.errors.length, 0);
+
+    });
+
 
 
 

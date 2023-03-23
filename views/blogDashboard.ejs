@@ -18,7 +18,7 @@
             <% posts.forEach(post => { %>
                 <div class="blog-card">
                     <h2><%= post.blogtitle %></h2>
-                    <p><%= post.datecreated %></p>
+                    <p><%= new Date(post.datecreated).toLocaleDateString('en-US', { day: '2-digit', month: '2-digit', year: 'numeric' }) %></p>
                     <p><%= post.blogdescription %></p>
                     <div class = "blog_buttons_forms">
                         <form action="/readblog/<%= post.id %>" method="get">
