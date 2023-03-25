@@ -40,7 +40,7 @@ app.use(session({
     cookie: {
         secure: true,
         httpOnly:true,
-        maxAge:  5 * 60 * 60 * 1000, //Cookies expire after 5 hours, in order to prevent session
+        maxAge:  5 * 60 * 60 * 1000, //Cookies expire after 5 hours, in order to prevent session hijacking
         sameSite: 'lax',
     }
 }));
@@ -82,7 +82,7 @@ app.use((req, res, next) => {
 
 
 //Pg client information to enable queries from the database blog.
-const { Pool, result } = require('pg');
+const { Pool } = require('pg');
 //Switches the database name based on whether we are testing or using the actual application
 const databaseName = process.env.NODE_ENV === "test" ? process.env.testDatabase : process.env.database;
 
@@ -120,8 +120,8 @@ server.listen(port, () => {
 
 
 module.exports = {
-    app,signUpValidation, escapeAllInput, userExistsCheck, storePasswordInfo,loginValidation, getPasswordInfo, validateLoginCredentials, TwoFactorEmail, searchBarValidation, escapeInput,
-    blogFormDataValidation, validateInputsAll
+    app,signUpValidation, escapeAllInput, userExistsCheck, storePasswordInfo,loginValidation, getPasswordInfo, validateLoginCredentials, searchBarValidation, escapeInput,
+    blogFormDataValidation, validateInputsAll, validateInput
 };
 /*All functions used*/
 
@@ -310,11 +310,9 @@ async function getPasswordInfo(email) {
         const saltFileName = process.env.NODE_ENV === "test" ? 'test/info/test_salt.json': 'info/salts.json';
         const saltData = await fs.promises.readFile(saltFileName, 'utf8');
         const saltObj = JSON.parse(saltData);
-       // console.log(JSON.stringify(saltObj));
         const userSalt = saltObj.user_info.find(u => u.email === email);
         const pepperData = await fs.promises.readFile(pepperFileName, 'utf8');
         const pepperObj = JSON.parse(pepperData);
-        //console.log(JSON.stringify(pepperObj));
         const userPepper= pepperObj.user_info.find(u => u.email === email);
         //console.log("The pepper: " + JSON.stringify(userPepper))
         //console.log("The salt: " + JSON.stringify(userSalt))
@@ -324,7 +322,6 @@ async function getPasswordInfo(email) {
         }else{
             return false;
         }
-        //return userSalt ? userSalt.salt : null;
     } catch (error) {
         console.log(error);
         return false;
@@ -389,14 +386,15 @@ async function TwoFactorEmail(email, token,res) {
          blogDescription: "There is an invalid input in your blog description",
          blogData: "There is an invalid input in your blog data",
      };
+
+
      const errors = [];
+
      const regex = /^[a-zA-Z0-9\s\.\?\!\,\-]+$/g // regular expression to match letters and punctuations
     for (const inputName in reqBody) {
         const input = reqBody[inputName];
         console.log("The input is : " + input)
-        //console.log("Length is " + input.length)
-        //console.log("The input is: " + input);
-        if (!regex.test(input) || !input || input.length < 1 ) {
+        if (regex.test(input) || !input || input.length < 1 ) {
             console.log("The error is in: "+ input)
             errors.push(errorMessages[inputName]);
         }
@@ -433,13 +431,32 @@ function validateInputsAll(reqBody) {
     }
 }
 
+function validateInput(inputJson){
+    const errors = []
+    const whiteListedInput = /^[a-zA-Z0-9.,!?\s"]+$/;
+    for (const inputName in inputJson) {
+        const input = inputJson[inputName]
+        console.log(whiteListedInput.test(input))
+        if (input === "" || input.length < 2 || whiteListedInput.test(input)===false) {
+            console.log(input)
+            errors.push("Your " + input + " contains a character that may not be allowed \n" +
+                "Kindly ensure that the input contains only alphabets, letters, numbers and basic punctuation")
+        }
+    }
+    if(errors.length >0){
+        return {isValid: false, errors}
+    }else{
+        return{isValid: true};
+    }
+}
 
-// Create a middleware function to generate and store a CRF token
+
+// middleware function that generatse and store a CRF token in the session
 function generateCRSFToken(req, res, next) {
     // Generate a random token using crypto module
     // Store the token in the session variable
-    req.session.token = crypto.randomBytes(32).toString('hex');
-    console.log(req.session.token)
+    req.session.crsfToken = crypto.randomBytes(32).toString('hex');
+    console.log(req.session.crsfToken)
     // Pass the token to the next middleware function
     next();
 }
@@ -452,13 +469,6 @@ function searchBarValidation(input){
         return true;
     }
 }
-
-function changeCookieAndSession(){
-
-}
-
-
-
 
 
 /*All the application get routes*/
@@ -536,8 +546,6 @@ app.get('/blogDashboard', (req, res)=>{
                 res.render('blogDashboard', {firstname: req.session.firstname, errors: "There was an error retrieving the posts", post: '', usermail:req.session.usermail })
             }else{
                 const blogPosts = result.rows;
-                //console.log(result.rows[0])
-                //console.log("The posts are " + blogPosts);
                 res.render('blogDashboard', {firstname: req.session.firstname, errors: false, posts: blogPosts, usermail: req.session.usermail })
             }
         })
@@ -581,8 +589,8 @@ app.get('/addBlogPost', generateCRSFToken, (req, res)=>{
             res.redirect('/')
         }
     }else{
-        console.log(req.session.token)
-        res.render('addBlogPost', {errors:false, csrfToken: req.session.token})
+        //console.log(req.session.token)
+        res.render('addBlogPost', {errors:false, csrfToken: req.session.crsfToken})
 
     }
 })
@@ -878,10 +886,11 @@ app.post('/editblog/:id', (req, res)=>{
 
 app.post('/addBlogPost', (req, res)=>{
     //const errors = validationResult(req);
-    if(req.session.usermail){
-        if(!blogFormDataValidation(req.body)) {
-            //return res.render("addBlogPost", {errors: errors.array(), csrfToken:req.session.token});
-            // console.log("There is an error somewhere here")
+    const serverSideCRSFToken = req.session.crsfToken;
+    const clientSideCRSFToken = req.body.csrftokenvalue
+    if(req.session.usermail && (serverSideCRSFToken===clientSideCRSFToken)){
+        console.log("invalid token")
+        if(validateInputsAll(req.body).isValid) {
             return res.render("addBlogPost", {errors: 'There is an error in your input', csrfToken:req.session.token});
         }else{
             const escapedReqBody = escapeAllInput(req.body)
