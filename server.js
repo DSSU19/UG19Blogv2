@@ -18,6 +18,7 @@ app.set('views', 'views');
 const port = 8080;
 
 
+
 app.use(express.static('client'));
 // Body parser middleware
 app.use(bodyParser.json());
@@ -30,7 +31,6 @@ app.use(session({
      genid: (req) => {
         return uuid(); // use UUIDs for session IDs
     },
-
      */
     genid : function (req){
         return  crypto.randomBytes(16).toString('hex');
@@ -40,10 +40,37 @@ app.use(session({
     cookie: {
         secure: true,
         httpOnly:true,
-        //maxAge: 24 * 60 * 60 * 1000, // 1 day
+        maxAge:  5 * 60 * 60 * 1000, //Cookies expire after 5 hours, in order to prevent session
         sameSite: 'lax',
     }
 }));
+
+
+//Check if there is an active session
+let inActivityTimer = 0
+let userTimedOut = false;
+//Reset the inactivity timer whenever the user makes a request (interacts with the websites)
+app.use((req,res, next)=>{
+    //If the user interacts with the website
+    if(req.session.usermail){
+        console.log('I am in here')
+        //Stop the timer
+        clearTimeout(inActivityTimer)
+        //Reset the timer again
+        inActivityTimer = setTimeout(() => {
+            req.session.destroy((err)=>{
+                if(err){
+                    console.log(err)
+                }else{
+                    userTimedOut = true
+                    console.log('Session destroyed due to inactivity.');
+                }
+            });
+        }, 30*60*1000); // 2 minutes for testing, 30 minutes for actual implmentation.
+    }
+    next()
+})
+
 
 //Testing middleware
 /*
@@ -352,6 +379,9 @@ async function TwoFactorEmail(email, token,res) {
 }
 
 
+
+
+
 //Validation input functions
  function blogFormDataValidation(reqBody){
      const errorMessages = {
@@ -383,6 +413,7 @@ async function TwoFactorEmail(email, token,res) {
 function validateInputsAll(reqBody) {
     const errors = [];
     const regex = /^[a-zA-Z0-9?!,.\\s]+$/
+    //const XSSScriptRergex =
     //const regex = /^[a-zA-Z0-9\s\.\?\!\,\-]+$/g // regular expression to match letters and punctuations
     //const regex = /^[a-zA-Z,.!?'"()\s]+$/; // regular expression to match letters and punctuations
 
@@ -485,10 +516,14 @@ app.get('/verify', async (req, res) => {
 /*Blog gets*/
 app.get('/blogDashboard', (req, res)=>{
     //Saving
-    if(!req.session.usermail){
-        //Will be changed to contain name rather than email
-        res.redirect('/')
-
+    if(!req.session.usermail ){
+        //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
+        if(userTimedOut) {
+            res.clearCookie('connect.sid');
+            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience."})
+        }else{
+            res.redirect('/')
+        }
     }else{
         console.log('Session ID:', req.sessionID);
         //Get all the blog posts from the database:
@@ -506,7 +541,6 @@ app.get('/blogDashboard', (req, res)=>{
                 res.render('blogDashboard', {firstname: req.session.firstname, errors: false, posts: blogPosts, usermail: req.session.usermail })
             }
         })
-
     }
 })
 app.get('/editblog/:id', (req, res)=>{
@@ -526,15 +560,26 @@ app.get('/editblog/:id', (req, res)=>{
         })
 
     }else{
-        res.redirect('/')
+        //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
+        if(userTimedOut) {
+            res.clearCookie('connect.sid');
+            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience."})
+        }else{
+            res.redirect('/')
+        }
 
     }
 })
 
 app.get('/addBlogPost', generateCRSFToken, (req, res)=>{
     if(!req.session.usermail){
-        //Will be changed to contain name rather than email
-        res.redirect('/')
+        //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
+        if(userTimedOut) {
+            res.clearCookie('connect.sid');
+            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience."})
+        }else{
+            res.redirect('/')
+        }
     }else{
         console.log(req.session.token)
         res.render('addBlogPost', {errors:false, csrfToken: req.session.token})
@@ -560,7 +605,13 @@ app.get('/readblog/:id', (req, res) => {
             }
         });
     }else{
-        res.redirect('/')
+        //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
+        if(userTimedOut) {
+            res.clearCookie('connect.sid');
+            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience."})
+        }else{
+            res.redirect('/')
+        }
     }
 
 });
@@ -589,7 +640,13 @@ app.get('/search', (req, res) => {
             res.render('search-results', {results: 0, usermail: req.session.usermail, errors: "Please try searching something else "});
         }
     }else{
-        res.redirect('/');
+        //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
+        if(userTimedOut) {
+            res.clearCookie('connect.sid');
+            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience."})
+        }else{
+            res.redirect('/')
+        }
     }
 });
 
@@ -710,14 +767,14 @@ app.post('/twofa', (req,res)=>{
                if(result.rows.length > 0){
                    pool.query(nameQuery)
                        .then((results)=>{
-                           //console.log(results.rows[0])
-                           //Set the session firstname
+                           //Session regeneration of authentication confirmation to prevent session hijacking
                           req.session.regenerate((err)=>{
                                if (err) {
                                    console.error(err);
                                }else{
                                    //Get users email and place it in the session
                                    req.session.usermail = email;
+                                   //Set the session firstname
                                    req.session.firstname= results.rows[0].firstname;
                                    res.redirect('/blogDashboard');
                                    pool.query(deleteTokenQuery)
