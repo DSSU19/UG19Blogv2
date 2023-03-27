@@ -342,24 +342,24 @@ async function validateLoginCredentials(password, email){
         const hashedPassword = crypto.createHash('sha256').update(saltedAndPepperedPassword).digest('hex');
         //console.log(hashedPassword)
         const userQuery = {
-            text: 'SELECT email, password FROM users WHERE email = $1 AND password =$2 AND isverified =$3',
+            text: 'SELECT email, password, authmethod FROM users WHERE email = $1 AND password =$2 AND isverified =$3',
             values: [email, hashedPassword, true] // 24 hours in milliseconds
         };
         try {
             const result = await pool.query(userQuery);
             //console.log(result.rows[0])
             if(result.rows.length > 0){
-                return true;
+                return {credentialsValid: true, authMethod: result.rows[0].authmethod};
             }else{
-                return false;
+                return {credentialsValid: false};
             }
         } catch (error) {
             console.log(error);
-            return false;
+            return {credentialsValid: false};
         }
 
     }else{
-        return false;
+        return {credentialsValid: false};
     }
 }
 
@@ -369,9 +369,9 @@ async function TwoFactorEmail(email, token,res) {
     const message = await transporter.sendMail({
         from: 'webabenablogtest@gmail.com',
         to: email,
-        subject: 'One Time PassCode',
+        subject: 'One Time PassCode for Authentication',
         text: `This is your one time token: ${token}`,
-        html: `This is your token: <b> ${token}</b>`
+        html: `This is your token: <b style="font-size: 24px;"> ${token}</b>`
     });
     //console.log("Message sent: %s", message.messageId);
     //console.log("Preview URL: %s", nodemailer.getTestMessageUrl(message));
@@ -714,32 +714,40 @@ app.post('/login', async (req, res)=>{
         const email = escapedLoginBody.email;
         const password = escapedLoginBody.password;
         const userValid = await validateLoginCredentials(password, email);
-        if(userValid){
-            const token=   Math.floor(100000 + Math.random() * 900000);
-            let creationTime = Date.now();
-            const selectQuery = {
-                text: 'SELECT otp, used FROM otps WHERE email = $1',
-                values: [email] // 24 hours in milliseconds
-            };
-            pool.query(selectQuery)
-                .then((result)=>{
-                    if(result.rows.length > 0){
-                        const updateQuery = {
-                            text: 'UPDATE otps SET used = $1, otp = $2, creationtime= $3 WHERE email = $4',
-                            values: [false, token, creationTime, email]
-                        };
-                        pool.query(updateQuery);
-                    }else{
-                        //This means that there has been no otp set before
-                        const query = {
-                            text: 'INSERT INTO otps (email, otp, used, creationtime) VALUES ($1, $2, $3, $4)',
-                            values: [email, token, false, creationTime]
-                        };
-                        pool.query(query)
-                    }
-                })
-            //Two factor Authentication.
-            await TwoFactorEmail(email, token, res)
+        if(userValid.credentialsValid){
+            const authenticationType = userValid.authMethod;
+            if(authenticationType==="email"){
+                //const token=   Math.floor(100000 + Math.random() * 900000);
+                // Generate a unique verification token for email Two factor Authentication.
+                const token = crypto.randomBytes(20).toString('hex');
+                let creationTime = Date.now();
+                const selectQuery = {
+                    text: 'SELECT otp, used FROM otps WHERE email = $1',
+                    values: [email] // 24 hours in milliseconds
+                };
+                pool.query(selectQuery)
+                    .then((result)=>{
+                        if(result.rows.length > 0){
+                            const updateQuery = {
+                                text: 'UPDATE otps SET used = $1, otp = $2, creationtime= $3 WHERE email = $4',
+                                values: [false, token, creationTime, email]
+                            };
+                            pool.query(updateQuery);
+                        }else{
+                            //This means that there has been no otp set before
+                            const query = {
+                                text: 'INSERT INTO otps (email, otp, used, creationtime) VALUES ($1, $2, $3, $4)',
+                                values: [email, token, false, creationTime]
+                            };
+                            pool.query(query)
+                        }
+                    })
+                //Two factor Authentication.
+                await TwoFactorEmail(email, token, res)
+            }else{
+
+            }
+
         }else{
             res.render('index', {errors: "Username and/or password is incorrect", message: false})
         }

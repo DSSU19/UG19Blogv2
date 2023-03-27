@@ -12,8 +12,8 @@
     <% if (email) { %>
     <input type="hidden" id="email" name="email" autocomplete="off" value="<%=email%>" >
         <% } %>
-    <label for="verificationtoken">Enter your 6-digit verification code:</label>
-    <input type="number" id="verificationtoken" name="verificationtoken" pattern="\d{6}" maxlength="6" autocomplete="off" required>
+    <label for="verificationtoken">Kindly input your verification token:</label>
+    <input type="text" id="verificationtoken" name="verificationtoken"  autocomplete="off" required>
     <% if (message) { %>
         <div>
             <p>A one time password has been to: <b> <%= message%> </b></p>
