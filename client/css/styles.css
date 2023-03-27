@@ -25,7 +25,74 @@ body{
     display: flex;
 }
 
+/*
+HEADER CSS STARTS HERE
+*/
+.header{
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+    width: 100%;
+    min-height: 36px;
+    padding: 60px;
+    background: #1abc9c;
+    margin-bottom: 50px;
+}
 
+.h-word{
+    animation: col-animation 5s linear infinite;
+    margin: 0 auto;
+    text-align: center;
+    font-size: 50px;
+    color: white;
+}
+.h-word-1{
+    --color-1: #DF8453;
+    --color-2: #3d8dae;
+    --color-3: #E4A9A8;
+
+}
+
+.h-word-2 {
+    --color-1: #DBAD4A;
+    --color-2: #ACCFCB;
+    --color-3: #17494D;
+}
+  
+.h-word-3 {
+    --color-1: #ACCFCB;
+    --color-2: #E4A9A8;
+    --color-3: #ACCFCB;
+}
+
+@keyframes col-animation {
+    0%    {color: var(--color-1)}
+    32%   {color: var(--color-1)}
+    33%   {color: var(--color-2)}
+    65%   {color: var(--color-2)}
+    66%   {color: var(--color-3)}
+    99%   {color: var(--color-3)}
+    100%  {color: var(--color-1)}
+  }
+#img1{
+    
+    position: absolute;
+    left: 0px;
+    top: 20px;
+    width: 150px;
+}
+#img2{
+    
+    position: absolute;
+    width: 150px;
+    transform: scaleX(-1);
+    right: 120px; 
+    top: 20px;
+}
+
+/* 
+END OF HEADER CSS 
+*/
 
 .form-design{
     box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
