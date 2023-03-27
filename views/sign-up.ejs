@@ -27,6 +27,14 @@
         </div>
 
         <div class="form-input-group">
+            <label for="authmethod">Choose your authentication method:</label><br>
+            <select name="authmethod">
+                <option value="email" title="Authentication via email">Email</option>
+                <option value="totp">Totp</option>
+            </select>
+        </div>
+
+        <div class="form-input-group">
             <input type="submit" value="Submit">
         </div>
         <% if (message) { %>

@@ -132,7 +132,8 @@ function signUpValidation(reqBody){
         username: "Username must be alphanumeric",
         password: "Password must be at least 8 characters long",
         email: "Please enter a valid email address",
-        passwordConfirmation: "Passwords do not match."
+        passwordConfirmation: "Passwords do not match.",
+        authmethod:'There is something wrong with your authMethod'
     };
     const errors = [];
    // const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
@@ -142,7 +143,7 @@ function signUpValidation(reqBody){
     for (const inputName in reqBody) {
         const input = reqBody[inputName];
         if(!input ||input.length < 1 ||(inputName==="username" && !usernameRegex.test(input)) ||(inputName==="password" && !passwordRegex.test(input))
-            || (inputName ==="email" && !emailRegex.test(input)) || (inputName==="passwordConfirmation") && input !== reqBody["password"]
+            || (inputName ==="email" && !emailRegex.test(input)) || ((inputName==="passwordConfirmation") && input !== reqBody["password"])|| ((inputName==="authmethod") && (input!=="email") && (input!=="totp"))
         ){
             errors.push(errorMessages[inputName]);
             console.log(errorMessages[inputName]);
@@ -155,6 +156,7 @@ function signUpValidation(reqBody){
         return { isValid: true };
     }
 }
+
 
 //Function to prevent XSS attacks
 function escapeAllInput(reqBody){
@@ -265,22 +267,23 @@ async function hashPassword(password, email){
 
 async function sendVerificationEmail(email, token,res) {
     // Construct the verification link
-    const verificationLink = `https://localhost:8080/verify?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`;
+    //const verificationLink = `https://localhost:8080/verify?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`;
     // send mail with defined transport object
     // Construct the email message
     const message = await transporter.sendMail({
         from: 'webabenablogtest@gmail.com',
         to: email,
-        subject: 'Verify your email address',
-        text: `Please click the following link to verify your email address: ${verificationLink}`,
-        html: `Please click <a href="${verificationLink}">here</a> to verify your email address.`
+        subject: 'Verify your email address with the token',
+        text: `This is your one time token: ${token}`,
+        html: `This is your token: <b> ${token}</b>`
+       //html: `Please click <a href="${verificationLink}">here</a> to verify your email address.`
     });
     console.log("Message sent: %s", message.messageId);
     // Message sent: <b658f8ca-6296-ccf4-8306-87d57a0b4321@example.com>
     // Preview only available when sending through an Ethereal account
     console.log("Preview URL: %s", nodemailer.getTestMessageUrl(message));
     // Preview URL: https://ethereal.email/message/WaQKMgKddxQDoou...
-    return res.render("email-verification", { email: email});
+    return res.render("email-verification", { email: email, errors: false});
 }
 
 
@@ -386,10 +389,7 @@ async function TwoFactorEmail(email, token,res) {
          blogDescription: "There is an invalid input in your blog description",
          blogData: "There is an invalid input in your blog data",
      };
-
-
      const errors = [];
-
      const regex = /^[a-zA-Z0-9\s\.\?\!\,\-]+$/g // regular expression to match letters and punctuations
     for (const inputName in reqBody) {
         const input = reqBody[inputName];
@@ -668,6 +668,7 @@ app.post('/sign-up',  (req,res)=>{
         const email = escapedReqBody.email;
         const password = escapedReqBody.password;
         const username = escapedReqBody.username;
+        const authMethod = escapedReqBody.authmethod;
         //Check if the user already exists in the system:
         userExistsCheck(email).then(async (userExists) => {
             if (userExists) {
@@ -687,15 +688,17 @@ app.post('/sign-up',  (req,res)=>{
                    const creationTime = Date.now();
                    // Insert the new user into the "users" table
                    const query = {
-                       text: 'INSERT INTO users (email, password, isverified, verificationtoken, firstname, creationtime) VALUES ($1, $2, $3, $4, $5, $6)',
-                       values: [email, hashedPassword, false, token, username, creationTime]
+                       text: 'INSERT INTO users (email, password, isverified, verificationtoken, firstname, creationtime, authmethod) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+                       values: [email, hashedPassword, false, token, username, creationTime,authMethod ]
                    };
                    pool.query(query)
                        .then(() => sendVerificationEmail(email, token,res))
                        .catch(err=>console.error(err))
                 }else{
                     console.log("Password unsuccessfully hashed");
-                    res.render('sign-up', {errors: "There was an error during the sign-up process, please try again later", message: false})
+                    const errors = [];
+                    errors.push("There was an error during the sign-up process, please try again later");
+                    res.render('sign-up', {errors: errors , message: false})
                 }
             }
             });
@@ -744,6 +747,61 @@ app.post('/login', async (req, res)=>{
     }else{
         res.render('index', {errors: "Username and/or password is incorrect", message: false})
     }
+
+})
+
+
+app.post('/emailverification',  (req, res) => {
+    //console.log('this got triggered')
+    // Extract the email and token from the URL query string
+    const email = req.body.verificationemail;
+    console.log(email)
+    const token = req.body.userverificationtoken;
+    const emailRegex = /^([a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9\-\.]+)\.([a-zA-Z]{2,63})$/;
+    const usernameRegex= /^[a-z0-9]+$/i;
+    if(!emailRegex.test(email) ||!usernameRegex.test(token)|| token==="" || email===""){
+        //console.log('in here')
+        res.render('email-verification', {email: email, errors: "The token you have inputted is invalid"})
+    }else{
+        const currentTime = Date.now()
+        //this value is for testing
+        //const timeDifference = 5 * 60 * 1000;
+        const timeDifference = 24 * 60 * 60 * 1000;
+        //Check if the token in the link is correct as the one in the database
+        const tokenQuery = {
+            text: 'SELECT verificationtoken FROM users WHERE email = $1 AND $2 - creationtime < $3',
+            values: [email, currentTime, timeDifference] // 24 hours in milliseconds
+        };
+        pool.query(tokenQuery, (err, result) => {
+            if (err) {
+                console.log(err);
+            } else {
+                console.log(result.rows[0].verificationtoken)
+                if (result.rows.length > 0 && token=== result.rows[0].verificationtoken) {
+                    //Adding an updated token to ensure that the link is a one time click.
+                    const updateToken = ""
+                    const updateQuery = {
+                        text: 'UPDATE users SET isverified = $1, verificationtoken = $2 WHERE email = $3 AND verificationtoken = $4',
+                        values: [true, updateToken, email, token],
+                    };
+                    pool.query(updateQuery)
+                        .then(()=>{
+                            res.render('index', {message: 'Your account has been verified', errors: false})
+                        }).catch(err=>console.log(err));
+                }else{
+                    res.render('email-verification', {email: email, errors: "The token you have inputted is invalid"})
+                }
+            }
+        })
+
+    }
+
+
+
+
+
+
+
 
 })
 
