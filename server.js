@@ -513,7 +513,7 @@ async function encryptWord(word, email){
     //It is to make sure data doesn't get changed in transmission
     const authenticationTag = cipher.getAuthTag().toString('hex');
     console.log('Authentication tag is ' + authenticationTag)
-    console.log('iv to string ' + iv.toString('hex'))
+    console.log('encrypt iv ' + iv.toString('hex'))
     encryptedWord = encryptedWord + iv.toString('hex') + authenticationTag;
     let encryption_key_data = {email:email, encryptionKey: encryptionKey}
     let storedKeys = await storePasswordInfo(keyFileName, encryption_key_data)
@@ -528,13 +528,12 @@ async function encryptWord(word, email){
 
 async function decryptWord(storedEncryptedWord, email){
     const keyFileName = process.env.NODE_ENV === "test" ? 'test/info/test_keys.json': 'info/keys.json';
-    const encryptedWord = storedEncryptedWord.slice(0, 26);
-    const iv = storedEncryptedWord.substring(26, 50);
-    const authenticationTag = storedEncryptedWord.slice(-32); // slice off last 16 characters to get authentication tag
-    console.log('Decryption Authentication tag is ' + authenticationTag)
+    const iv = storedEncryptedWord.slice(-56, -32);// Get the next 24 characters after the last 32 characters
+    const encryptedWord = storedEncryptedWord.slice(0,  storedEncryptedWord.indexOf(iv)); //Get from the beginning till the iv
+    const authenticationTag = storedEncryptedWord.slice(-32); // Get the last 32 characters of the string
+    console.log('Decryption Authentication tag is ' +authenticationTag)
     console.log('iv is ' + iv)
-
-    const ivBuffer = Buffer.from(iv, 'hex');
+     const ivBuffer = Buffer.from(iv, 'hex');
     const authTagBuffer = Buffer.from(authenticationTag, 'hex');
     //Get encryption key from file name:
     const encryption_key_obj = await getEncryptionKeys(email, keyFileName)
@@ -928,7 +927,7 @@ app.post('/login', async (req, res)=>{
 
 })
 
-app.post('/setup-totp',  (req, res)=>{
+app.post('/setup-totp',  async(req, res)=>{
     const qrCodeDataSrc = req.body.qrCodeData;
     let secret = req.body.secret;
     let email = req.body.email;
@@ -940,55 +939,65 @@ app.post('/setup-totp',  (req, res)=>{
     }else{
         email = escapeInput(email);
         secret= escapeInput(secret);
+        const encrypted_secret = await encryptWord(secret, email);
+        if(encrypted_secret){
+            //const hashedSecret = crypto.createHash('sha256').update(secret).digest('hex');
+            console.log(encrypted_secret)
+            const insertSecretQuery = {
+                text: 'INSERT INTO totp (email, secret) VALUES ($1, $2)',
+                values: [email, encrypted_secret]
+            };
+            pool.query(insertSecretQuery)
+                .then(()=>
+                {
+                    delete req.session.verifiedTotpUserEmail;
+                    res.render('index', {message: 'Your TFA has been set-up, you can now login securely', errors: false})
 
-        //const hashedSecret = crypto.createHash('sha256').update(secret).digest('hex');
-        console.log(hashedSecret)
-        const insertSecretQuery = {
-            text: 'INSERT INTO totp (email, secret) VALUES ($1, $2)',
-            values: [email, hashedSecret]
-        };
-        pool.query(insertSecretQuery)
-            .then(()=>
-            {
-                delete req.session.verifiedTotpUserEmail;
-                res.render('index', {message: 'Your TFA has been set-up, you can now login securely', errors: false})
+                })
+                .catch((err)=>{
+                    console.log(err)
+                    res.render('setup-totp', { qrCodeData: qrCodeDataSrc, secret: secret.base32, email: email, errors: "An error occured, kindly refresh the page and try again"})
+                })
 
-            })
-            .catch((err)=>{
-                console.log(err)
-                res.render('setup-totp', { qrCodeData: qrCodeDataSrc, secret: secret.base32, email: email, errors: "An error occured, kindly refresh the page and try again"})
-            })
+        }
+
+
     }
 })
 
 
-app.post('/verify-totp', function(req, res) {
+app.post('/verify-totp', async function(req, res) {
     const userEmail = req.session.totpLoginUserMail
     const selectSecret = {
-        text: 'SELECT secret FROM otps WHERE email = $1',
+        text: 'SELECT secret FROM totp WHERE email = $1',
         values: [userEmail] // 24 hours in milliseconds
     };
-
-    pool.query(selectSecret).then((results)=>{
-        let secret =results.rows[0].secret;
-
-
-    })
-    const token = req.body.token;
-    const inputRegex= /^[a-z0-9]+$/i;
-    const emailRegex = /^([a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9\-\.]+)\.([a-zA-Z]{2,63})$/;
-
-    if( inputRegex.test(token)|| token==="" || emailRegex.test(userEmail) || userEmail===""){
-        const verified = speakeasy.totp.verify({ secret: secret, encoding: 'base32', token: token, window: 1 });
-        if (verified) {
-            //Session regeneration of authentication confirmation to prevent session hijacking
-            loginSessionIDRegenerate(userEmail, req,res)
-        } else {
-            res.render('verify-totp', {email: userEmail, errors:'Invalid token'});
+    let results = await pool.query(selectSecret);
+    results = results.rows[0].secret
+    console.log(results)
+    const decrypted_secret = await decryptWord(results, userEmail)
+    console.log(decrypted_secret)
+    if(decrypted_secret){
+        const token = req.body.token;
+        const inputRegex= /^[a-z0-9]+$/i;
+        const emailRegex = /^([a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9\-\.]+)\.([a-zA-Z]{2,63})$/;
+        if( inputRegex.test(token)|| token==="" || emailRegex.test(userEmail) || userEmail===""){
+            const verified = speakeasy.totp.verify({ secret: decrypted_secret, encoding: 'base32', token: token, window: 1 });
+            if (verified) {
+                //Session regeneration of authentication confirmation to prevent session hijacking
+                delete req.session.totpLoginUserMail
+                loginSessionIDRegenerate(userEmail,res,req)
+            } else {
+                res.render('verify-totp', {email: userEmail, errors:'Invalid token'});
+            }
+        }else{
+            res.render('verify-totp.ejs', {email: userEmail, errors:'There was an error in your input'});
         }
     }else{
-        res.render('verify-totp.ejs', {email: userEmail, errors:'There was an error in your input'});
+        res.render('verify-totp.ejs', {email: userEmail, errors:'There was an error during the process'});
+
     }
+
 });
 
 app.post('/twofa', (req,res)=>{

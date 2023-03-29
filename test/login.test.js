@@ -5,6 +5,7 @@ const nodemailer = require("nodemailer");
 const sinon = require('sinon');
 const crypto = require('crypto');
 const fs = require('fs');
+const speakeasy = require("speakeasy");
 const request = supertest(app.app)
 
 const { Pool } = require('pg');
@@ -156,6 +157,9 @@ describe('decryptionMethod', function(){
     const notStoredEmail= 'abbyammo14@gmail.com'
     const decryptionTestEmail= 'abbyammo14@gmail.com'
     const secret = 'my_secret_key';
+    let speakeasySecret =    speakeasy.generateSecret({ length: 20 });
+    speakeasySecret= speakeasySecret.base32;
+
     const keyFileName = process.env.NODE_ENV === "test" ? 'test/info/test_keys.json': 'info/keys.json';
     before(async function() {
         await deleteUserFromFile(decryptionTestEmail, keyFileName);
@@ -176,7 +180,16 @@ describe('decryptionMethod', function(){
         const encryptedWord = await app.encryptWord(secret, decryptionTestEmail)
         const result = await app.decryptWord(encryptedWord, decryptionTestEmail) ;
         assert.notStrictEqual(result, false);
+        assert.strictEqual(result, secret);
     });
+
+    it('Decryption method on speakeasy secret', async function() {
+        const encryptedWord = await app.encryptWord(speakeasySecret, decryptionTestEmail)
+        const result = await app.decryptWord(encryptedWord, decryptionTestEmail) ;
+        assert.notStrictEqual(result, false);
+        assert.strictEqual(result, speakeasySecret);
+    });
+
 
 
 
