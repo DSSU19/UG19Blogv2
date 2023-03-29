@@ -25,6 +25,11 @@ body{
     display: flex;
 }
 
+
+#secretstyling{
+    font-weight: bolder;
+}
+
 /*
 HEADER CSS STARTS HERE
 */
@@ -38,6 +43,9 @@ HEADER CSS STARTS HERE
     background: #1abc9c;
     margin-bottom: 50px;
 }
+
+
+
 
 .h-word{
     animation: col-animation 5s linear infinite;

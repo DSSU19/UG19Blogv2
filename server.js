@@ -6,6 +6,8 @@ const nodemailer = require("nodemailer");
 const fs = require('fs');
 const ejs = require('ejs');
 const crypto = require('crypto');
+const speakeasy = require('speakeasy');
+const qrCode = require('qrcode');
 const session = require('express-session');
 const { v4: uuid } = require('uuid')
 
@@ -44,7 +46,7 @@ app.use(session({
         sameSite: 'lax',
     }
 }));
-
+//Constants for encryption,
 
 //Check if there is an active session
 let inActivityTimer = 0
@@ -52,7 +54,7 @@ let userTimedOut = false;
 //Reset the inactivity timer whenever the user makes a request (interacts with the websites)
 app.use((req,res, next)=>{
     //If the user interacts with the website
-    if(req.session.usermail){
+    if(req.session.usermail || req.session.verifiedTotpUserEmail || req.session.totpLoginUserMail){
         console.log('I am in here')
         //Stop the timer
         clearTimeout(inActivityTimer)
@@ -70,16 +72,6 @@ app.use((req,res, next)=>{
     }
     next()
 })
-
-
-//Testing middleware
-/*
-app.use((req, res, next) => {
-    console.log('Time:', Date.now())
-    next()
-})
-*/
-
 
 //Pg client information to enable queries from the database blog.
 const { Pool } = require('pg');
@@ -121,7 +113,7 @@ server.listen(port, () => {
 
 module.exports = {
     app,signUpValidation, escapeAllInput, userExistsCheck, storePasswordInfo,loginValidation, getPasswordInfo, validateLoginCredentials, searchBarValidation, escapeInput,
-    blogFormDataValidation, validateInputsAll, validateInput
+    blogFormDataValidation, validateInputsAll, validateInput, encryptWord, getEncryptionKeys, decryptWord
 };
 /*All functions used*/
 
@@ -331,6 +323,25 @@ async function getPasswordInfo(email) {
     }
 }
 
+async function getEncryptionKeys(email, filename) {
+    try {
+        const fileData = await fs.promises.readFile(filename, 'utf8');
+        const fileObj = JSON.parse(fileData);
+        const userObj = fileObj.user_info.find(u => u.email === email);
+        if(userObj){
+            //console.log('gets here')
+            //console.log(userObj)
+            return {userObj};
+        }else{
+            return false;
+        }
+    } catch (error) {
+        console.log(error);
+        return false;
+    }
+}
+
+
 
 //function to validate login credentials
 async function validateLoginCredentials(password, email){
@@ -461,6 +472,7 @@ function generateCRSFToken(req, res, next) {
     next();
 }
 
+
 function searchBarValidation(input){
     const searchRegex =  /^[a-zA-Z0-9\s]+$/;
     if(!searchRegex.test(input)){
@@ -470,6 +482,81 @@ function searchBarValidation(input){
     }
 }
 
+function loginSessionIDRegenerate(email, res, req){
+    const nameQuery = {
+        text: 'SELECT firstname FROM users WHERE email = $1',
+        values: [email],  // 24 hours in milliseconds
+    }
+    req.session.regenerate((err)=>{
+        if (err) {
+            console.error(err);
+        }else{
+            //Get users email and place it in the session
+            req.session.usermail = email;
+            //Set the session firstname
+            pool.query(nameQuery).then((results)=>{
+                req.session.firstname= results.rows[0].firstname;
+            })
+            res.redirect('/blogDashboard');
+
+        }
+    })
+}
+
+async function encryptWord(word, email){
+    const keyFileName = process.env.NODE_ENV === "test" ? 'test/info/test_keys.json': 'info/keys.json';
+    const encryptionKey = crypto.randomBytes(32);
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', encryptionKey, iv);
+    let encryptedWord = cipher.update(word, 'utf8', 'hex') + cipher.final('hex');
+    // Get the authentication tag, this is used to provide an additional layer of security
+    //It is to make sure data doesn't get changed in transmission
+    const authenticationTag = cipher.getAuthTag().toString('hex');
+    console.log('Authentication tag is ' + authenticationTag)
+    console.log('iv to string ' + iv.toString('hex'))
+    encryptedWord = encryptedWord + iv.toString('hex') + authenticationTag;
+    let encryption_key_data = {email:email, encryptionKey: encryptionKey}
+    let storedKeys = await storePasswordInfo(keyFileName, encryption_key_data)
+    if(storedKeys){
+        console.log("Encrypted word " + encryptedWord)
+        return encryptedWord
+    }else{
+        return false
+    }
+
+}
+
+async function decryptWord(storedEncryptedWord, email){
+    const keyFileName = process.env.NODE_ENV === "test" ? 'test/info/test_keys.json': 'info/keys.json';
+    const encryptedWord = storedEncryptedWord.slice(0, 26);
+    const iv = storedEncryptedWord.substring(26, 50);
+    const authenticationTag = storedEncryptedWord.slice(-32); // slice off last 16 characters to get authentication tag
+    console.log('Decryption Authentication tag is ' + authenticationTag)
+    console.log('iv is ' + iv)
+
+    const ivBuffer = Buffer.from(iv, 'hex');
+    const authTagBuffer = Buffer.from(authenticationTag, 'hex');
+    //Get encryption key from file name:
+    const encryption_key_obj = await getEncryptionKeys(email, keyFileName)
+    //console.log(encryption_key_obj)
+    const encryption_key = Buffer.from(encryption_key_obj.userObj.encryptionKey);
+    //console.log(encryption_key)
+    if(encryption_key){
+        const decipher = crypto.createDecipheriv('aes-256-gcm',encryption_key , ivBuffer, {
+            authTagLength: 16,
+        });
+        decipher.setAuthTag(authTagBuffer);
+        // Decrypt the encrypted secret using the decipher object
+        let decryptedWord = decipher.update(encryptedWord, 'hex', 'utf8');
+        decryptedWord += decipher.final('utf8');
+        console.log("Decrypted word " + decryptedWord)
+
+        return decryptedWord;
+    }else{
+        return false;
+    }
+
+}
 
 /*All the application get routes*/
 //Routes
@@ -484,9 +571,9 @@ app.get('/sign-up', (req, res) => {
 
 
 app.get('/email-verification', (req,res)=>{
-    res.render('email-verification', {email: email})
+    res.render('email-verification', {email: false})
 })
-app.get('/verify', async (req, res) => {
+/*app.get('/verify', async (req, res) => {
     //console.log('this got triggered')
     // Extract the email and token from the URL query string
     const email = req.query.email;
@@ -521,7 +608,34 @@ app.get('/verify', async (req, res) => {
             }
         }
     })
+})*/
+
+app.get('/setup-totp', (req, res)=>{
+    if(req.session.verifiedTotpUserEmail){
+        const secret = speakeasy.generateSecret({ length: 20 });
+        qrCode.toDataURL(secret.otpauth_url, function(err, qrCodeData) {
+            if (err) {
+                console.log(err);
+                res.render('setup-totp', { qrCodeData: null, secret: null, errors:"An error occured please try again", email: null, message: false });
+            } else {
+                res.render('setup-totp', { qrCodeData: qrCodeData, secret: secret.base32, errors:false, email: req.session.verifiedTotpUserEmail, message: 'Your email has been verified'});
+            }
+        });
+
+    }else{
+            return res.redirect('/')
+    }
 })
+app.get('/verify-totp', (req, res)=>{
+    if( req.session.totpLoginUserMail){
+        res.render('verify-totp', {errors: false})
+
+    }else{
+        return res.redirect('/')
+    }
+
+})
+
 
 /*Blog gets*/
 app.get('/blogDashboard', (req, res)=>{
@@ -661,6 +775,8 @@ app.get('/search', (req, res) => {
 
 
 
+
+
 /*All the application post routes*/
 app.post('/sign-up',  (req,res)=>{
     if(signUpValidation(req.body).isValid){
@@ -708,6 +824,59 @@ app.post('/sign-up',  (req,res)=>{
     }
 })
 
+app.post('/emailverification',  (req, res) => {
+    //console.log('this got triggered')
+    // Extract the email and token from the URL query string
+    const email = req.body.verificationemail;
+    console.log(email)
+    const token = req.body.userverificationtoken;
+    const emailRegex = /^([a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9\-\.]+)\.([a-zA-Z]{2,63})$/;
+    const usernameRegex= /^[a-z0-9]+$/i;
+    if(!emailRegex.test(email) ||!usernameRegex.test(token)|| token==="" || email===""){
+        //console.log('in here')
+        res.render('email-verification', {email: email, errors: "The token you have inputted is invalid"})
+    }else{
+        const currentTime = Date.now()
+        //this value is for testing
+        //const timeDifference = 5 * 60 * 1000;
+        const timeDifference = 24 * 60 * 60 * 1000;
+        //Check if the token in the link is correct as the one in the database
+        const tokenQuery = {
+            text: 'SELECT verificationtoken, authmethod FROM users WHERE email = $1 AND $2 - creationtime < $3',
+            values: [email, currentTime, timeDifference] // 24 hours in milliseconds
+        };
+        pool.query(tokenQuery, (err, result) => {
+            if (err) {
+                console.log(err);
+            } else {
+                console.log(result.rows[0].verificationtoken)
+                if (result.rows.length > 0 && token=== result.rows[0].verificationtoken) {
+                    //Adding an updated token to ensure that the link is a one time click.
+                    const updateToken = ""
+                    const updateQuery = {
+                        text: 'UPDATE users SET isverified = $1, verificationtoken = $2 WHERE email = $3 AND verificationtoken = $4',
+                        values: [true, updateToken, email, token],
+                    };
+                    pool.query(updateQuery)
+                        .then(()=>{
+                            const authMethod = result.rows[0].authmethod;
+                            if(authMethod==="email"){
+                                //Take them to the
+                                res.render('index', {message: 'Your account has been verified', errors: false})
+                            }else if(authMethod==="totp"){
+                                req.session.verifiedTotpUserEmail = email
+                                res.redirect('/setup-totp')
+                                //res.render('setUpTotp', {message: 'Your account has been verified', errors: false})
+                            }
+                        }).catch(err=>console.log(err));
+                }else{
+                    res.render('email-verification', {email: email, errors: "The token you have inputted is invalid"})
+                }
+            }
+        })
+    }
+})
+
 app.post('/login', async (req, res)=>{
     if(loginValidation(req.body)){
         const escapedLoginBody= escapeAllInput(req.body);
@@ -744,12 +913,13 @@ app.post('/login', async (req, res)=>{
                     })
                 //Two factor Authentication.
                 await TwoFactorEmail(email, token, res)
-            }else{
-
+            }else if(authenticationType==="totp"){
+                req.session.totpLoginUserMail= email;
+                res.redirect('/verify-totp')
             }
 
         }else{
-            res.render('index', {errors: "Username and/or password is incorrect", message: false})
+            res.render('index', {errors: "Username and/or password is incorrect", message: false, qrCodeData: false})
         }
         //console.log(email,password)
     }else{
@@ -758,60 +928,68 @@ app.post('/login', async (req, res)=>{
 
 })
 
-
-app.post('/emailverification',  (req, res) => {
-    //console.log('this got triggered')
-    // Extract the email and token from the URL query string
-    const email = req.body.verificationemail;
-    console.log(email)
-    const token = req.body.userverificationtoken;
+app.post('/setup-totp',  (req, res)=>{
+    const qrCodeDataSrc = req.body.qrCodeData;
+    let secret = req.body.secret;
+    let email = req.body.email;
+    const checkedBox = req.body.totpconfirmation;
     const emailRegex = /^([a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9\-\.]+)\.([a-zA-Z]{2,63})$/;
-    const usernameRegex= /^[a-z0-9]+$/i;
-    if(!emailRegex.test(email) ||!usernameRegex.test(token)|| token==="" || email===""){
-        //console.log('in here')
-        res.render('email-verification', {email: email, errors: "The token you have inputted is invalid"})
+    const secretRegex= /^[a-z0-9]+$/i;
+    if(!emailRegex.test(email) || !secretRegex.test(secret) || checkedBox !=="true"||secret===""||email===""){
+            res.render('setup-totp', { qrCodeData: qrCodeDataSrc, secret: secret.base32, email: email, errors: "An error occured, kindly refresh the page and try again"})
     }else{
-        const currentTime = Date.now()
-        //this value is for testing
-        //const timeDifference = 5 * 60 * 1000;
-        const timeDifference = 24 * 60 * 60 * 1000;
-        //Check if the token in the link is correct as the one in the database
-        const tokenQuery = {
-            text: 'SELECT verificationtoken FROM users WHERE email = $1 AND $2 - creationtime < $3',
-            values: [email, currentTime, timeDifference] // 24 hours in milliseconds
+        email = escapeInput(email);
+        secret= escapeInput(secret);
+
+        //const hashedSecret = crypto.createHash('sha256').update(secret).digest('hex');
+        console.log(hashedSecret)
+        const insertSecretQuery = {
+            text: 'INSERT INTO totp (email, secret) VALUES ($1, $2)',
+            values: [email, hashedSecret]
         };
-        pool.query(tokenQuery, (err, result) => {
-            if (err) {
-                console.log(err);
-            } else {
-                console.log(result.rows[0].verificationtoken)
-                if (result.rows.length > 0 && token=== result.rows[0].verificationtoken) {
-                    //Adding an updated token to ensure that the link is a one time click.
-                    const updateToken = ""
-                    const updateQuery = {
-                        text: 'UPDATE users SET isverified = $1, verificationtoken = $2 WHERE email = $3 AND verificationtoken = $4',
-                        values: [true, updateToken, email, token],
-                    };
-                    pool.query(updateQuery)
-                        .then(()=>{
-                            res.render('index', {message: 'Your account has been verified', errors: false})
-                        }).catch(err=>console.log(err));
-                }else{
-                    res.render('email-verification', {email: email, errors: "The token you have inputted is invalid"})
-                }
-            }
-        })
+        pool.query(insertSecretQuery)
+            .then(()=>
+            {
+                delete req.session.verifiedTotpUserEmail;
+                res.render('index', {message: 'Your TFA has been set-up, you can now login securely', errors: false})
 
+            })
+            .catch((err)=>{
+                console.log(err)
+                res.render('setup-totp', { qrCodeData: qrCodeDataSrc, secret: secret.base32, email: email, errors: "An error occured, kindly refresh the page and try again"})
+            })
     }
-
-
-
-
-
-
-
-
 })
+
+
+app.post('/verify-totp', function(req, res) {
+    const userEmail = req.session.totpLoginUserMail
+    const selectSecret = {
+        text: 'SELECT secret FROM otps WHERE email = $1',
+        values: [userEmail] // 24 hours in milliseconds
+    };
+
+    pool.query(selectSecret).then((results)=>{
+        let secret =results.rows[0].secret;
+
+
+    })
+    const token = req.body.token;
+    const inputRegex= /^[a-z0-9]+$/i;
+    const emailRegex = /^([a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9\-\.]+)\.([a-zA-Z]{2,63})$/;
+
+    if( inputRegex.test(token)|| token==="" || emailRegex.test(userEmail) || userEmail===""){
+        const verified = speakeasy.totp.verify({ secret: secret, encoding: 'base32', token: token, window: 1 });
+        if (verified) {
+            //Session regeneration of authentication confirmation to prevent session hijacking
+            loginSessionIDRegenerate(userEmail, req,res)
+        } else {
+            res.render('verify-totp', {email: userEmail, errors:'Invalid token'});
+        }
+    }else{
+        res.render('verify-totp.ejs', {email: userEmail, errors:'There was an error in your input'});
+    }
+});
 
 app.post('/twofa', (req,res)=>{
     //Restrict input to only numeric values.

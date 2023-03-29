@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <%- include('partials/head') %>
+</head>
+<body>
+
+<%- include('partials/homenav') %>
+<h1>Set Up Two Factor Authentication Time-Based One-Time Password (TOTP)</h1>
+<% if (qrCodeData) { %>
+    <% if (message) { %>
+        <div>
+            <p><b>Message:</b>  <%= message%></p>
+        </div>
+    <% } %>
+    <div id="qr-code">
+        <img src="<%=qrCodeData%>" id="totpQrCode">
+    </div>
+    <div id="secret">
+        <p id="secretstyling">Secret Key: <%= secret %></p>
+    </div>
+    <div>
+        <p> Kindly scan the QR code or input the secret into your authenticator app</p>
+        <p> This could be Google, Microsoft or any other authenticator app you have available.</p>
+        <p> When you are done setting up, kindly click the I have completed the totp setup button and click the set up complete button </p>
+
+    </div>
+    <form method="POST" action="/setup-totp">
+        <input type="hidden" hidden id="qrCodeData" name="qrCodeData" required value="<%=qrCodeData%>" >
+        <input type="hidden" hidden id="email" name="email" required value="<%=email%>" >
+        <input type="hidden" name="secret" value="<%=secret%>">
+        <input type="checkbox" id="totpconfirmation" name="totpconfirmation" value="true">
+        <label for="totpconfirmation"> I have completed the totp set up </label><br>
+        <button type="submit">Set up complete</button>
+        <% if (errors) { %>
+            <div>
+                <p> <b> <%= errors%> </b></p>
+            </div>
+        <% } %>
+    </form>
+
+
+
+<% } else { %>
+    <p>Unauthorised access</p>
+
+    <% if (errors) { %>
+    <div>
+        <p><%=errors%> </p>
+    </div>
+    <% } %>
+   <!-- <form method="POST" action="/generate">
+        <button type="submit">Generate QR Code</button>
+    </form>-->
+<% } %>
+
+
+</body>
+</html>

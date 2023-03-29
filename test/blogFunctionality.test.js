@@ -193,9 +193,6 @@ describe('validateSearchInput', function() {
         assert.strictEqual(result.errors, undefined);
 
     });
-
-
-
 });
 
 

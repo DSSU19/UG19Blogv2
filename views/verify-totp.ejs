@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <%- include('partials/head') %>
+</head>
+<body>
+
+<%- include('partials/homenav') %>
+<h1>Two Factor Authentication Totp</h1>
+    <form method="POST" action="/verify-totp">
+        <label for="token">Please input your one-time passcode:</label>
+        <input type="text" id="token" name="token" required>
+        <button type="submit">Verify One-Time Passcode</button>
+        <% if (errors) { %>
+            <div>
+                <p> <b> <%= errors%> </b></p>
+            </div>
+        <% } %>
+    </form>
+</body>
+</html>

@@ -21,7 +21,19 @@ running tests that have to deal with queries update, insert, delete.
  */
 
 //NODE_ENV=test mocha
-
+async function deleteUserFromFile(email, fileName){
+    const fileDta = await fs.promises.readFile(fileName, 'utf8');
+    const userObj = JSON.parse(fileDta);
+    // Find the index of the object to remove
+    const index = userObj.user_info.findIndex((obj) => obj.email === email);
+    // Remove the object if it exists
+    if (index !== -1) {
+        console.log('time to remove')
+        userObj.user_info.splice(index, 1);
+    }
+    // Write the updated file
+    fs.writeFileSync(fileName, JSON.stringify(userObj));
+}
 describe('validateLoginInput', function() {
     //Testing when the user inputs valid user data.
     it('Testing when the user inputs valid data', function() {
@@ -120,6 +132,55 @@ describe('validateLoginCredentials',   function() {
         assert.strictEqual(result, false);
     });
 });
+
+
+//These methods are for the encryption of the key before database storage
+describe('encryptionMethod', function(){
+    const secret = 'my_secret_key';
+    const email= 'abbyammo13@gmail.com'
+    //Testing when the user inputs valid user data.
+    it('Email is not duplicated', async function() {
+        const result = await app.encryptWord(secret, email);
+        assert.notStrictEqual(result, false);
+    });
+    it('email encryption key has already been stored in json', async function() {
+        const result = await app.encryptWord(secret, email);
+        assert.strictEqual(result, false);
+    });
+
+})
+
+//This method is for the decryption of the secret to be used for 2FA totp login
+describe('decryptionMethod', function(){
+    const email= 'abbyammo13@gmail.com'
+    const notStoredEmail= 'abbyammo14@gmail.com'
+    const decryptionTestEmail= 'abbyammo14@gmail.com'
+    const secret = 'my_secret_key';
+    const keyFileName = process.env.NODE_ENV === "test" ? 'test/info/test_keys.json': 'info/keys.json';
+    before(async function() {
+        await deleteUserFromFile(decryptionTestEmail, keyFileName);
+        // runs before all tests in this file regardless where this line is defined
+    });
+    //Testing when the user inputs valid user data.
+    it('get keys method functionality_ email exists', async function() {
+        const result = await app.getEncryptionKeys(email, keyFileName) ;
+        assert.notStrictEqual(result, false);
+    });
+    it('Get keys, user not stored', async function() {
+        const result = await app.getEncryptionKeys(notStoredEmail, keyFileName) ;
+        assert.strictEqual(result, false);
+    });
+
+
+    it('Decryption method', async function() {
+        const encryptedWord = await app.encryptWord(secret, decryptionTestEmail)
+        const result = await app.decryptWord(encryptedWord, decryptionTestEmail) ;
+        assert.notStrictEqual(result, false);
+    });
+
+
+
+})
 
 /*
 describe('loginPostRoute',   function() {
