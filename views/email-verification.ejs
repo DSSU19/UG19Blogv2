@@ -12,7 +12,10 @@
         <p>Email has been sent to:  <%=email%></p>
         <p>The email contains your verification token which will only be valid for 24 hours</p>
         <p>Kindly input the verification token in the form below: </p>
-        <form action="/emailverification" method="post">
+        <form action="/email-verification" method="post">
+            <div class="form-input-group">
+                <input type="hidden" id="csrftokenvalue" name="csrftokenvalue" value="<%=csrfToken%>">
+            </div>
             <input type="text" hidden id="verificationemail" name="verificationemail" value="<%=email%>" required>
             <div class="form-input-group">
                 <label for="userverificationtoken">Enter your verification token given below:</label>

@@ -22,13 +22,18 @@
                     <p><%= post.blogdescription %></p>
                     <div class = "blog_buttons_forms">
                         <form action="/readblog/<%= post.id %>" method="get">
+                            <input type="hidden" name="csrftokenvalue" value="<%= csrfToken %>">
                             <button type="submit">Read More</button>
                         </form>
                         <% if (post.blogauthor === usermail) { %>
                             <form action="/editblog/<%= post.id %>" method="get">
+                                <input type="hidden" name="csrftokenvalue" value="<%= csrfToken %>">
                                 <button type="submit">Edit</button>
                             </form>
                             <form action="/deleteblog/<%= post.id %>" method="post">
+                                <div class="input_labels">
+                                    <input type="hidden" name="csrftokenvalue" value="<%= csrfToken %>">
+                                </div>
                                 <button type="submit">Delete</button>
                             </form>
                         <% } %>

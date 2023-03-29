@@ -7,7 +7,7 @@
 <body>
 <%- include('partials/navigation') %>
     <form method="post" action="/addBlogPost" class="blogs_forms">
-        <!-- Add the following code to include the CSRF crsfToken as a hidden field -->
+        <!-- Add the following code to include the CSRF csrfToken as a hidden field -->
         <div class="input_labels">
             <input type="hidden" name="csrftokenvalue" value="<%= csrfToken %>">
         </div>

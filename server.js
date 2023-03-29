@@ -43,7 +43,7 @@ app.use(session({
         secure: true,
         httpOnly:true,
         maxAge:  5 * 60 * 60 * 1000, //Cookies expire after 5 hours, in order to prevent session hijacking
-        sameSite: 'lax',
+        sameSite: true,
     }
 }));
 //Constants for encryption,
@@ -72,6 +72,9 @@ app.use((req,res, next)=>{
     }
     next()
 })
+
+
+app.use(generateCRSFTokenV2);
 
 //Pg client information to enable queries from the database blog.
 const { Pool } = require('pg');
@@ -125,7 +128,8 @@ function signUpValidation(reqBody){
         password: "Password must be at least 8 characters long",
         email: "Please enter a valid email address",
         passwordConfirmation: "Passwords do not match.",
-        authmethod:'There is something wrong with your authMethod'
+        authmethod:'There is something wrong with your authMethod',
+        csrftokenvalue: 'Unauthorised post request'
     };
     const errors = [];
    // const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
@@ -136,6 +140,7 @@ function signUpValidation(reqBody){
         const input = reqBody[inputName];
         if(!input ||input.length < 1 ||(inputName==="username" && !usernameRegex.test(input)) ||(inputName==="password" && !passwordRegex.test(input))
             || (inputName ==="email" && !emailRegex.test(input)) || ((inputName==="passwordConfirmation") && input !== reqBody["password"])|| ((inputName==="authmethod") && (input!=="email") && (input!=="totp"))
+            || ((inputName==="csrftokenvalue")&& !usernameRegex.test(input)) || input===undefined
         ){
             errors.push(errorMessages[inputName]);
             console.log(errorMessages[inputName]);
@@ -257,7 +262,7 @@ async function hashPassword(password, email){
     }
 }
 
-async function sendVerificationEmail(email, token,res) {
+async function sendVerificationEmail(email, token,res, req) {
     // Construct the verification link
     //const verificationLink = `https://localhost:8080/verify?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}`;
     // send mail with defined transport object
@@ -275,7 +280,8 @@ async function sendVerificationEmail(email, token,res) {
     // Preview only available when sending through an Ethereal account
     console.log("Preview URL: %s", nodemailer.getTestMessageUrl(message));
     // Preview URL: https://ethereal.email/message/WaQKMgKddxQDoou...
-    return res.render("email-verification", { email: email, errors: false});
+    req.session.csrfToken =  crypto.randomBytes(32).toString('hex');
+    return res.render("email-verification", { email: email, errors: false, csrfToken: req.session.csrfToken});
 }
 
 
@@ -374,7 +380,7 @@ async function validateLoginCredentials(password, email){
     }
 }
 
-async function TwoFactorEmail(email, token,res) {
+async function TwoFactorEmail(email, token,res, req) {
     // send mail with defined transport object
     // Construct the email message
     const message = await transporter.sendMail({
@@ -386,7 +392,8 @@ async function TwoFactorEmail(email, token,res) {
     });
     //console.log("Message sent: %s", message.messageId);
     //console.log("Preview URL: %s", nodemailer.getTestMessageUrl(message));
-    return res.render("verifyToken", { message: email, errors: false, email: email});
+    req.session.csrfToken =  crypto.randomBytes(32).toString('hex');
+    return res.render("verifyToken", { message: email, errors: false, email: email, csrfToken: req.session.csrfToken});
 }
 
 
@@ -401,11 +408,12 @@ async function TwoFactorEmail(email, token,res) {
          blogData: "There is an invalid input in your blog data",
      };
      const errors = [];
-     const regex = /^[a-zA-Z0-9\s\.\?\!\,\-]+$/g // regular expression to match letters and punctuations
+     const regex = /^[a-zA-Z0-9.,!?\s"]+$/;
+     //const regex = /^[a-zA-Z0-9\s\.\?\!\,\-]+$/g // regular expression to match letters and punctuations
     for (const inputName in reqBody) {
         const input = reqBody[inputName];
-        console.log("The input is : " + input)
-        if (regex.test(input) || !input || input.length < 1 ) {
+       // console.log("The input is : " + input)
+        if (!regex.test(input) || !input || input.length < 2 ) {
             console.log("The error is in: "+ input)
             errors.push(errorMessages[inputName]);
         }
@@ -444,7 +452,7 @@ function validateInputsAll(reqBody) {
 
 function validateInput(inputJson){
     const errors = []
-    const whiteListedInput = /^[a-zA-Z0-9.,!?\s"]+$/;
+    const whiteListedInput = /^[a-zA-Z0-9.,!?\s"]+$/; //The right input regex
     for (const inputName in inputJson) {
         const input = inputJson[inputName]
         console.log(whiteListedInput.test(input))
@@ -461,16 +469,26 @@ function validateInput(inputJson){
     }
 }
 
+function generateCRSFTokenV2(req, res, next) {
+    const csrfToken = crypto.randomBytes(32).toString('hex');
+    const csrfInputFieldName = 'csrftokenvalue';
 
-// middleware function that generatse and store a CRF token in the session
-function generateCRSFToken(req, res, next) {
-    // Generate a random token using crypto module
-    // Store the token in the session variable
-    req.session.crsfToken = crypto.randomBytes(32).toString('hex');
-    console.log(req.session.crsfToken)
-    // Pass the token to the next middleware function
+    if (req.method === 'GET') {
+        req.session.csrfFieldName = csrfInputFieldName;
+        req.session.csrfToken = csrfToken;
+    } else if (req.method === 'POST') {
+        const reqCsrfToken = req.body[csrfInputFieldName] || req.query[csrfInputFieldName];
+        if (!reqCsrfToken || reqCsrfToken !== req.session.csrfToken) {
+            console.log('gets in here');
+            return   res.render('index', {errors: "Illegal Request, please refrain from executing such actions!", message: false, csrfToken: req.session.csrfToken})
+        }
+    }
+
     next();
 }
+
+//This generated a csrf token unique for every session id and includes an expiration time
+
 
 
 function searchBarValidation(input){
@@ -496,8 +514,9 @@ function loginSessionIDRegenerate(email, res, req){
             //Set the session firstname
             pool.query(nameQuery).then((results)=>{
                 req.session.firstname= results.rows[0].firstname;
+                res.redirect('/blogDashboard');
             })
-            res.redirect('/blogDashboard');
+
 
         }
     })
@@ -512,13 +531,13 @@ async function encryptWord(word, email){
     // Get the authentication tag, this is used to provide an additional layer of security
     //It is to make sure data doesn't get changed in transmission
     const authenticationTag = cipher.getAuthTag().toString('hex');
-    console.log('Authentication tag is ' + authenticationTag)
-    console.log('encrypt iv ' + iv.toString('hex'))
+    //console.log('Authentication tag is ' + authenticationTag)
+    //console.log('encrypt iv ' + iv.toString('hex'))
     encryptedWord = encryptedWord + iv.toString('hex') + authenticationTag;
     let encryption_key_data = {email:email, encryptionKey: encryptionKey}
     let storedKeys = await storePasswordInfo(keyFileName, encryption_key_data)
     if(storedKeys){
-        console.log("Encrypted word " + encryptedWord)
+        //console.log("Encrypted word " + encryptedWord)
         return encryptedWord
     }else{
         return false
@@ -531,8 +550,8 @@ async function decryptWord(storedEncryptedWord, email){
     const iv = storedEncryptedWord.slice(-56, -32);// Get the next 24 characters after the last 32 characters
     const encryptedWord = storedEncryptedWord.slice(0,  storedEncryptedWord.indexOf(iv)); //Get from the beginning till the iv
     const authenticationTag = storedEncryptedWord.slice(-32); // Get the last 32 characters of the string
-    console.log('Decryption Authentication tag is ' +authenticationTag)
-    console.log('iv is ' + iv)
+    //console.log('Decryption Authentication tag is ' +authenticationTag)
+    //console.log('iv is ' + iv)
      const ivBuffer = Buffer.from(iv, 'hex');
     const authTagBuffer = Buffer.from(authenticationTag, 'hex');
     //Get encryption key from file name:
@@ -548,7 +567,7 @@ async function decryptWord(storedEncryptedWord, email){
         // Decrypt the encrypted secret using the decipher object
         let decryptedWord = decipher.update(encryptedWord, 'hex', 'utf8');
         decryptedWord += decipher.final('utf8');
-        console.log("Decrypted word " + decryptedWord)
+        //console.log("Decrypted word " + decryptedWord)
 
         return decryptedWord;
     }else{
@@ -561,53 +580,17 @@ async function decryptWord(storedEncryptedWord, email){
 //Routes
 app.get('/', (req, res) => {
     console.log('Session ID:', req.sessionID);
-    res.render('index', {errors: false, message: false})
+    res.render('index', {errors: false, message: false, csrfToken: req.session.csrfToken})
 });
 
 app.get('/sign-up', (req, res) => {
-    res.render('sign-up', {errors: false, message: false})
+    res.render('sign-up', {errors: false, message: false,  csrfToken: req.session.csrfToken})
 });
 
 
 app.get('/email-verification', (req,res)=>{
-    res.render('email-verification', {email: false})
+    res.render('email-verification', {email: false, csrfToken: req.session.csrfToken})
 })
-/*app.get('/verify', async (req, res) => {
-    //console.log('this got triggered')
-    // Extract the email and token from the URL query string
-    const email = req.query.email;
-    const token = req.query.token;
-    const currentTime = Date.now()
-    //this value is for testing
-    //const timeDifference = 5 * 60 * 1000;
-    const timeDifference = 24 * 60 * 60 * 1000;
-    //Check if the token in the link is correct as the one in the database
-    const tokenQuery = {
-        text: 'SELECT verificationtoken FROM users WHERE email = $1 AND $2 - creationtime < $3',
-        values: [email, currentTime, timeDifference] // 24 hours in milliseconds
-    };
-    pool.query(tokenQuery, (err, result) => {
-        if (err) {
-            console.log(err);
-        } else {
-            console.log(result.rows[0].verificationtoken)
-            if (result.rows.length > 0 && token=== result.rows[0].verificationtoken) {
-                //Adding an updated token to ensure that the link is a one time click.
-                const updateToken = ""
-                const updateQuery = {
-                    text: 'UPDATE users SET isverified = $1, verificationtoken = $2 WHERE email = $3 AND verificationtoken = $4',
-                    values: [true, updateToken, email, token],
-                };
-                pool.query(updateQuery)
-                    .then(()=>{
-                        res.render('index', {message: 'Your account has been verified', errors: false})
-                    }).catch(err=>console.log(err));
-            }else{
-                return res.render('verificationError')
-            }
-        }
-    })
-})*/
 
 app.get('/setup-totp', (req, res)=>{
     if(req.session.verifiedTotpUserEmail){
@@ -615,9 +598,9 @@ app.get('/setup-totp', (req, res)=>{
         qrCode.toDataURL(secret.otpauth_url, function(err, qrCodeData) {
             if (err) {
                 console.log(err);
-                res.render('setup-totp', { qrCodeData: null, secret: null, errors:"An error occured please try again", email: null, message: false });
+                res.render('setup-totp', { qrCodeData: null, secret: null, errors:"An error occured please try again", email: null, message: false, csrfToken: req.session.csrfToken  });
             } else {
-                res.render('setup-totp', { qrCodeData: qrCodeData, secret: secret.base32, errors:false, email: req.session.verifiedTotpUserEmail, message: 'Your email has been verified'});
+                res.render('setup-totp', { qrCodeData: qrCodeData, secret: secret.base32, errors:false, email: req.session.verifiedTotpUserEmail, message: 'Your email has been verified', csrfToken: req.session.csrfToken});
             }
         });
 
@@ -627,7 +610,7 @@ app.get('/setup-totp', (req, res)=>{
 })
 app.get('/verify-totp', (req, res)=>{
     if( req.session.totpLoginUserMail){
-        res.render('verify-totp', {errors: false})
+        res.render('verify-totp', {errors: false , csrfToken: req.session.csrfToken})
 
     }else{
         return res.redirect('/')
@@ -643,7 +626,7 @@ app.get('/blogDashboard', (req, res)=>{
         //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
         if(userTimedOut) {
             res.clearCookie('connect.sid');
-            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience."})
+            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken})
         }else{
             res.redirect('/')
         }
@@ -656,10 +639,10 @@ app.get('/blogDashboard', (req, res)=>{
         pool.query(getAllPostQuery, (err, result)=>{
             if (err){
                 console.error(err);
-                res.render('blogDashboard', {firstname: req.session.firstname, errors: "There was an error retrieving the posts", post: '', usermail:req.session.usermail })
+                res.render('blogDashboard', {firstname: req.session.firstname, errors: "There was an error retrieving the posts", post: '', usermail:req.session.usermail,  csrfToken: req.session.csrfToken })
             }else{
                 const blogPosts = result.rows;
-                res.render('blogDashboard', {firstname: req.session.firstname, errors: false, posts: blogPosts, usermail: req.session.usermail })
+                res.render('blogDashboard', {firstname: req.session.firstname, errors: false, posts: blogPosts, usermail: req.session.usermail,  csrfToken: req.session.csrfToken })
             }
         })
     }
@@ -673,10 +656,10 @@ app.get('/editblog/:id', (req, res)=>{
         };
         pool.query(getBlogPostQuery, (err, result)=>{
             if(err){
-                res.render('editBlog', {errors: 'There was an error with updating the blog', post: '', firstname: req.session.firstname})
+                res.render('editBlog', {errors: 'There was an error with updating the blog', post: '', firstname: req.session.firstname, csrfToken: req.session.csrfToken})
             }else{
                 const blogPost = result.rows[0]
-                res.render('editBlog', {errors: false, post: blogPost, firstname: req.session.firstname })
+                res.render('editBlog', {errors: false, post: blogPost, firstname: req.session.firstname, csrfToken: req.session.csrfToken})
             }
         })
 
@@ -684,7 +667,7 @@ app.get('/editblog/:id', (req, res)=>{
         //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
         if(userTimedOut) {
             res.clearCookie('connect.sid');
-            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience."})
+            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken})
         }else{
             res.redirect('/')
         }
@@ -692,7 +675,7 @@ app.get('/editblog/:id', (req, res)=>{
     }
 })
 
-app.get('/addBlogPost', generateCRSFToken, (req, res)=>{
+app.get('/addBlogPost', (req, res)=>{
     if(!req.session.usermail){
         //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
         if(userTimedOut) {
@@ -703,7 +686,7 @@ app.get('/addBlogPost', generateCRSFToken, (req, res)=>{
         }
     }else{
         //console.log(req.session.token)
-        res.render('addBlogPost', {errors:false, csrfToken: req.session.crsfToken})
+        res.render('addBlogPost', {errors:false, csrfToken: req.session.csrfToken})
 
     }
 })
@@ -778,52 +761,54 @@ app.get('/search', (req, res) => {
 
 /*All the application post routes*/
 app.post('/sign-up',  (req,res)=>{
-    if(signUpValidation(req.body).isValid){
-        const escapedReqBody = escapeAllInput(req.body)
-        const email = escapedReqBody.email;
-        const password = escapedReqBody.password;
-        const username = escapedReqBody.username;
-        const authMethod = escapedReqBody.authmethod;
-        //Check if the user already exists in the system:
-        userExistsCheck(email).then(async (userExists) => {
-            if (userExists) {
-                //console.log(res.toString())
-                //Redirect the user to the email verification page in order to prevent account enumeration, but no actual email will be sent to that user
-                //since the user already exists in the system.
-                res.render('email-verification', {email:email})
-            } else {
-                //If user does not already exists in the password then we can hash the password
-                //Call the hashedPassword which is a function that generated a random hash.
-                const hashedPassword =  await hashPassword(password, email)
-                console.log(hashedPassword)
-                if(hashedPassword){
-                    //Process with hashed Password has gone well without any errors and thus process can continue.
-                    // Generate a unique verification token for email verification
-                   const token = crypto.randomBytes(20).toString('hex');
-                   const creationTime = Date.now();
-                   // Insert the new user into the "users" table
-                   const query = {
-                       text: 'INSERT INTO users (email, password, isverified, verificationtoken, firstname, creationtime, authmethod) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-                       values: [email, hashedPassword, false, token, username, creationTime,authMethod ]
-                   };
-                   pool.query(query)
-                       .then(() => sendVerificationEmail(email, token,res))
-                       .catch(err=>console.error(err))
-                }else{
-                    console.log("Password unsuccessfully hashed");
-                    const errors = [];
-                    errors.push("There was an error during the sign-up process, please try again later");
-                    res.render('sign-up', {errors: errors , message: false})
+        if(signUpValidation(req.body).isValid){
+            console.log('gets here')
+            const escapedReqBody = escapeAllInput(req.body)
+            const email = escapedReqBody.email;
+            const password = escapedReqBody.password;
+            const username = escapedReqBody.username;
+            const authMethod = escapedReqBody.authmethod;
+            //Check if the user already exists in the system:
+            userExistsCheck(email).then(async (userExists) => {
+                if (userExists) {
+                    //console.log(res.toString())
+                    //Redirect the user to the email verification page in order to prevent account enumeration, but no actual email will be sent to that user
+                    //since the user already exists in the system.
+                    res.render('email-verification', {email:email, errors:false})
+                } else {
+                    //If user does not already exists in the password then we can hash the password
+                    //Call the hashedPassword which is a function that generated a random hash.
+                    const hashedPassword =  await hashPassword(password, email)
+                    console.log(hashedPassword)
+                    if(hashedPassword){
+                        //Process with hashed Password has gone well without any errors and thus process can continue.
+                        // Generate a unique verification token for email verification
+                       const token = crypto.randomBytes(20).toString('hex');
+                       const creationTime = Date.now();
+                       // Insert the new user into the "users" table
+                       const query = {
+                           text: 'INSERT INTO users (email, password, isverified, verificationtoken, firstname, creationtime, authmethod) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+                           values: [email, hashedPassword, false, token, username, creationTime,authMethod ]
+                       };
+                       pool.query(query)
+                           .then(() => sendVerificationEmail(email, token,res, req))
+                           .catch(err=>console.error(err))
+                    }else{
+                        console.log("Password unsuccessfully hashed");
+                        const errors = [];
+                        errors.push("There was an error during the sign-up process, please try again later");
+                        res.render('sign-up', {errors: errors , message: false, csrfToken: req.session.csrfToken})
+                    }
                 }
-            }
-            });
-    }else{
-        const errors = signUpValidation(req.body).errors;
-        res.render('sign-up', {errors: errors, message: false})
-    }
+                });
+        }else{
+            console.log('Invalid data or csrf token')
+            const errors = signUpValidation(req.body).errors;
+            res.render('sign-up', {errors: errors, message: false, csrfToken: req.session.csrfToken})
+        }
 })
 
-app.post('/emailverification',  (req, res) => {
+app.post('/email-verification',  (req, res) => {
     //console.log('this got triggered')
     // Extract the email and token from the URL query string
     const email = req.body.verificationemail;
@@ -833,7 +818,7 @@ app.post('/emailverification',  (req, res) => {
     const usernameRegex= /^[a-z0-9]+$/i;
     if(!emailRegex.test(email) ||!usernameRegex.test(token)|| token==="" || email===""){
         //console.log('in here')
-        res.render('email-verification', {email: email, errors: "The token you have inputted is invalid"})
+        res.render('email-verification', {email: email, errors: "The token you have inputted is invalid", csrfToken: req.session.csrfToken})
     }else{
         const currentTime = Date.now()
         //this value is for testing
@@ -861,7 +846,7 @@ app.post('/emailverification',  (req, res) => {
                             const authMethod = result.rows[0].authmethod;
                             if(authMethod==="email"){
                                 //Take them to the
-                                res.render('index', {message: 'Your account has been verified', errors: false})
+                                res.render('index', {message: 'Your account has been verified', errors: false, csrfToken: req.session.csrfToken})
                             }else if(authMethod==="totp"){
                                 req.session.verifiedTotpUserEmail = email
                                 res.redirect('/setup-totp')
@@ -911,18 +896,18 @@ app.post('/login', async (req, res)=>{
                         }
                     })
                 //Two factor Authentication.
-                await TwoFactorEmail(email, token, res)
+                await TwoFactorEmail(email, token, res, req)
             }else if(authenticationType==="totp"){
                 req.session.totpLoginUserMail= email;
                 res.redirect('/verify-totp')
             }
 
         }else{
-            res.render('index', {errors: "Username and/or password is incorrect", message: false, qrCodeData: false})
+            res.render('index', {errors: "Username and/or password is incorrect", message: false, qrCodeData: false,csrfToken: req.session.csrfToken })
         }
         //console.log(email,password)
     }else{
-        res.render('index', {errors: "Username and/or password is incorrect", message: false})
+        res.render('index', {errors: "Username and/or password is incorrect", message: false, csrfToken: req.session.csrfToken})
     }
 
 })
@@ -935,7 +920,7 @@ app.post('/setup-totp',  async(req, res)=>{
     const emailRegex = /^([a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9\-\.]+)\.([a-zA-Z]{2,63})$/;
     const secretRegex= /^[a-z0-9]+$/i;
     if(!emailRegex.test(email) || !secretRegex.test(secret) || checkedBox !=="true"||secret===""||email===""){
-            res.render('setup-totp', { qrCodeData: qrCodeDataSrc, secret: secret.base32, email: email, errors: "An error occured, kindly refresh the page and try again"})
+            res.render('setup-totp', { qrCodeData: qrCodeDataSrc, secret: secret.base32, email: email, errors: "An error occured, kindly refresh the page and try again", csrfToken: req.session.csrfToken})
     }else{
         email = escapeInput(email);
         secret= escapeInput(secret);
@@ -951,12 +936,12 @@ app.post('/setup-totp',  async(req, res)=>{
                 .then(()=>
                 {
                     delete req.session.verifiedTotpUserEmail;
-                    res.render('index', {message: 'Your TFA has been set-up, you can now login securely', errors: false})
+                    res.render('index', {message: 'Your TFA has been set-up, you can now login securely', errors: false, csrfToken: req.session.csrfToken})
 
                 })
                 .catch((err)=>{
                     console.log(err)
-                    res.render('setup-totp', { qrCodeData: qrCodeDataSrc, secret: secret.base32, email: email, errors: "An error occured, kindly refresh the page and try again"})
+                    res.render('setup-totp', { qrCodeData: qrCodeDataSrc, secret: secret.base32, email: email, errors: "An error occured, kindly refresh the page and try again", csrfToken: req.session.csrfToken})
                 })
 
         }
@@ -988,13 +973,13 @@ app.post('/verify-totp', async function(req, res) {
                 delete req.session.totpLoginUserMail
                 loginSessionIDRegenerate(userEmail,res,req)
             } else {
-                res.render('verify-totp', {email: userEmail, errors:'Invalid token'});
+                res.render('verify-totp', {email: userEmail, errors:'Invalid token', csrfToken: req.session.csrfToken});
             }
         }else{
-            res.render('verify-totp.ejs', {email: userEmail, errors:'There was an error in your input'});
+            res.render('verify-totp.ejs', {email: userEmail, errors:'There was an error in your input', csrfToken: req.session.csrfToken});
         }
     }else{
-        res.render('verify-totp.ejs', {email: userEmail, errors:'There was an error during the process'});
+        res.render('verify-totp.ejs', {email: userEmail, errors:'There was an error during the process', csrfToken: req.session.csrfToken});
 
     }
 
@@ -1043,7 +1028,7 @@ app.post('/twofa', (req,res)=>{
                            })
                        })
                }else{
-                   res.render('verifyToken', {errors:'Invalid token', email:email, message: email})
+                   res.render('verifyToken', {errors:'Invalid token', email:email, message: email, csrfToken: req.session.csrfToken})
                }
            })
 })
@@ -1076,7 +1061,7 @@ app.post('/deleteblog/:id', (req, res)=>{
         pool.query(deletePostQuery, (err, results)=>{
             if(err){
                 console.log(err)
-                res.render('blogDashboard', {errors: 'Error deleting the blog post', firstname: req.session.usermail, post:'' })
+                res.render('blogDashboard', {errors: 'Error deleting the blog post', firstname: req.session.usermail, post:'', csrfToken: req.session.csrfToken })
             }else{
                 res.redirect('/blogDashboard')
 
@@ -1101,7 +1086,7 @@ app.post('/editblog/:id', (req, res)=>{
 
         pool.query(getBlogPostQuery,(err, result)=>{
             if(err){
-                res.render('editBlog', {errors: 'There was an error with updating the blog', post: '', firstname: req.session.usermail})
+                res.render('editBlog', {errors: 'There was an error with updating the blog', post: '', firstname: req.session.usermail, csrfToken: req.session.csrfToken})
 
             }else{
                 const blogPost = result.rows[0]
@@ -1112,9 +1097,9 @@ app.post('/editblog/:id', (req, res)=>{
                 const timeCreated = Date.now().toString();
                 const dateCreated = new Date(parseInt(timeCreated)).toISOString().slice(0, 10);
                 //let allData = [blogTitle, blogDescription, blogInfo]
-                let allData = { blogTitle: blogTitle, blogDescription:blogDescription , blogInfo: blogInfo };
+                let allData = { blogTitle: blogTitle, blogDescription:blogDescription , blogData: blogInfo };
 
-                if(validateInputsAll(allData).isValid){
+                if(blogFormDataValidation(allData).isValid){
                     const updateQuery = {
                         text: 'UPDATE blogData SET blogtitle = $1, bloginfo = $2, datecreated= $3, blogdescription = $4 WHERE id = $5',
                         values: [blogTitle, blogInfo, dateCreated, blogDescription, blogId]
@@ -1123,10 +1108,10 @@ app.post('/editblog/:id', (req, res)=>{
                         res.redirect('/blogDashboard')
                     }).catch((err)=>{
                         console.log(err)
-                        return res.render("editBlog", {errors: 'There was an error when trying to edit your blog', firstname: req.session.firstname, post:blogPost});
+                        return res.render("editBlog", {errors: 'There was an error when trying to edit your blog', firstname: req.session.firstname, post:blogPost, csrfToken: req.session.csrfToken});
                     })
                 }else{
-                    return res.render("editBlog", {errors: 'There is an error in your input', firstname: req.session.firstname, post:blogPost});
+                    return res.render("editBlog", {errors: 'There is an error in your input', firstname: req.session.firstname, post:blogPost, csrfToken: req.session.csrfToken});
 
                 }
             }
@@ -1139,11 +1124,9 @@ app.post('/editblog/:id', (req, res)=>{
 
 app.post('/addBlogPost', (req, res)=>{
     //const errors = validationResult(req);
-    const serverSideCRSFToken = req.session.crsfToken;
-    const clientSideCRSFToken = req.body.csrftokenvalue
-    if(req.session.usermail && (serverSideCRSFToken===clientSideCRSFToken)){
+    if(req.session.usermail){
         console.log("invalid token")
-        if(validateInputsAll(req.body).isValid) {
+        if(!blogFormDataValidation(req.body).isValid) {
             return res.render("addBlogPost", {errors: 'There is an error in your input', csrfToken:req.session.token});
         }else{
             const escapedReqBody = escapeAllInput(req.body)
@@ -1161,7 +1144,6 @@ app.post('/addBlogPost', (req, res)=>{
                 text: 'SELECT id FROM users WHERE email = $1',
                 values: [author],  // 24 hours in milliseconds
             }
-
             pool.query(userIDQuery).then((results)=>{
                 let user_id = results.rows[0].id
                 //console.log(user_id)
@@ -1176,7 +1158,7 @@ app.post('/addBlogPost', (req, res)=>{
                         res.redirect('/blogDashboard')})
                     .catch(err=>{
                         console.log(err)
-                        res.render('addBlogPost', {errors: 'There was an error with adding the blog post'})
+                        res.render('addBlogPost', {errors: 'There was an error with adding the blog post', csrfToken:req.session.token})
                     })
             }).catch(err=>{
                 console.log(err)
