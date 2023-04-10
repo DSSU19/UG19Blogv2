@@ -12,6 +12,7 @@
     <form action="/editblog/<%= post.id %>" method="post">
         <div class="form-input-group">
             <input type="hidden" id="csrftokenvalue" name="csrftokenvalue" value="<%=csrfToken%>">
+            <input type="hidden" id="doubleSubmitCookie" name="doubleSubmitCookie" value="<%=doubleSubmitCookie%>">
         </div>
         <label for="blogtitle">Title:</label>
         <input type="text" id="blogtitle" name="blogtitle" value="<%= post.blogtitle %>">

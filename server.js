@@ -503,7 +503,7 @@ function DoubleSubmitCookieImplementation(req, res, next) {
     let doubleSubmitCookie = crypto.randomBytes(32).toString('hex');
     //console.log("New value is: " +  doubleSubmitCookie)
     const cookieInputFieldName = 'doubleSubmitCookie';
-    console.log(req.url)
+    //console.log(req.url)
     if(req.url ==="/logout"){
         return next()
     }else if (req.method === 'GET') {
@@ -517,7 +517,6 @@ function DoubleSubmitCookieImplementation(req, res, next) {
         const cookieInputField = req.body[cookieInputFieldName] || req.query[cookieInputFieldName];
         if (!cookieInputField || cookieInputField !== req.cookies['doubleSubmitCookie']) {
             return res.status(403).end()
-
         }
     }
     next();
@@ -737,10 +736,10 @@ app.get('/editblog/:id', (req, res)=>{
         };
         pool.query(getBlogPostQuery, (err, result)=>{
             if(err){
-                res.render('editBlog', {errors: 'There was an error with updating the blog', post: '', firstname: req.session.firstname, csrfToken: req.session.csrfToken})
+                res.render('editBlog', {errors: 'There was an error with updating the blog', post: '', firstname: req.session.firstname, csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie})
             }else{
                 const blogPost = result.rows[0]
-                res.render('editBlog', {errors: false, post: blogPost, firstname: req.session.firstname, csrfToken: req.session.csrfToken})
+                res.render('editBlog', {errors: false, post: blogPost, firstname: req.session.firstname, csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie})
             }
         })
 
@@ -748,7 +747,7 @@ app.get('/editblog/:id', (req, res)=>{
         //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
         if(userTimedOut) {
             res.clearCookie('connect.sid');
-            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken})
+            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie})
         }else{
             res.redirect('/')
         }
@@ -761,13 +760,13 @@ app.get('/addBlogPost', (req, res)=>{
         //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
         if(userTimedOut) {
             res.clearCookie('connect.sid');
-            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience."})
+            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie})
         }else{
             res.redirect('/')
         }
     }else{
         //console.log(req.session.token)
-        res.render('addBlogPost', {errors:false, csrfToken: req.session.csrfToken})
+        res.render('addBlogPost', {errors:false, csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie})
 
     }
 })
@@ -793,7 +792,7 @@ app.get('/readblog/:id', (req, res) => {
         //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
         if(userTimedOut) {
             res.clearCookie('connect.sid');
-            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience."})
+            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie})
         }else{
             res.redirect('/')
         }
@@ -828,7 +827,7 @@ app.get('/search', (req, res) => {
         //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
         if(userTimedOut) {
             res.clearCookie('connect.sid');
-            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience."})
+            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie})
         }else{
             res.redirect('/')
         }
@@ -1244,11 +1243,11 @@ app.post('/addBlogPost', (req, res)=>{
                         res.redirect('/blogDashboard')})
                     .catch(err=>{
                         console.log(err)
-                        res.render('addBlogPost', {errors: 'There was an error with adding the blog post', csrfToken:req.session.token})
+                        res.render('addBlogPost', {errors: 'There was an error with adding the blog post', csrfToken:req.session.token, doubleSubmitCookie: res.locals.doubleSubmitCookie})
                     })
             }).catch(err=>{
                 console.log(err)
-                res.render('addBlogPost', {errors: 'There was an error with adding the blog post',csrfToken:req.session.token })
+                res.render('addBlogPost', {errors: 'There was an error with adding the blog post',csrfToken:req.session.token, doubleSubmitCookie: res.locals.doubleSubmitCookie })
             })
             console.log(blogTitle);
             console.log(blogData);
