@@ -400,7 +400,8 @@ async function TwoFactorEmail(email, token,res, req) {
     //console.log("Preview URL: %s", nodemailer.getTestMessageUrl(message));
     req.session.csrfToken =  crypto.randomBytes(32).toString('hex');
 
-    const doubleSubmitCookie =crypto.randomBytes(32).toString('hex') + process.env.cookie_secret_key;
+    let doubleSubmitCookie =crypto.randomBytes(32).toString('hex');
+    doubleSubmitCookie = crypto.createHmac('sha256', process.env.cookie_secret_key).update(doubleSubmitCookie).digest('hex');
     res.cookie('doubleSubmitCookie', doubleSubmitCookie);
    res.locals.doubleSubmitCookie = doubleSubmitCookie;
     return res.render("verifyToken", { message: email, errors: false, email: email, csrfToken: req.session.csrfToken, doubleSubmitCookie:res.locals.doubleSubmitCookie});
@@ -507,7 +508,7 @@ function DoubleSubmitCookieImplementation(req, res, next) {
     if(req.url ==="/logout"){
         return next()
     }else if (req.method === 'GET') {
-        doubleSubmitCookie = doubleSubmitCookie+ process.env.cookie_secret_key;
+        doubleSubmitCookie = crypto.createHmac('sha256', process.env.cookie_secret_key).update(doubleSubmitCookie).digest('hex');
         res.cookie('doubleSubmitCookie', doubleSubmitCookie);
        res.locals.doubleSubmitCookie = doubleSubmitCookie;
         //console.log("REQUEST: "  +res.locals.doubleSubmitCookie)
