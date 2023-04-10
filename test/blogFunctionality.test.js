@@ -193,6 +193,25 @@ describe('validateSearchInput', function() {
         assert.strictEqual(result.errors, undefined);
 
     });
+
+
+    it('Encrypt word', function() {
+        //should return an object with isValid equal to false and an array of errors when given invalid inputs
+        const unencryptedWord = "seates123"
+        const result = app.encryptWord(unencryptedWord);
+        assert.notStrictEqual(result, unencryptedWord);
+    });
+
+    it('Decrypt word', function() {
+        //should return an object with isValid equal to false and an array of errors when given invalid inputs
+        const unencryptedWord = "seates123"
+        const encryptedWordObject = app.encryptWord(unencryptedWord);
+        const result = app.decryptWord(encryptedWordObject)
+        assert.strictEqual(result, unencryptedWord)
+    });
+
+
+
 });
 
 

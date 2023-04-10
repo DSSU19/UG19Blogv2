@@ -177,15 +177,15 @@ describe('decryptionMethod', function(){
 
 
     it('Decryption method', async function() {
-        const encryptedWord = await app.encryptWord(secret, decryptionTestEmail)
-        const result = await app.decryptWord(encryptedWord, decryptionTestEmail) ;
+        const encryptedWord = await app.encryptTotpInfo(secret, decryptionTestEmail)
+        const result = await app.decryptTotpInfo(encryptedWord, decryptionTestEmail) ;
         assert.notStrictEqual(result, false);
         assert.strictEqual(result, secret);
     });
 
     it('Decryption method on speakeasy secret', async function() {
-        const encryptedWord = await app.encryptWord(speakeasySecret, decryptionTestEmail)
-        const result = await app.decryptWord(encryptedWord, decryptionTestEmail) ;
+        const encryptedWord = await app.encryptTotpInfo(speakeasySecret, decryptionTestEmail)
+        const result = await app.decryptTotpInfo(encryptedWord, decryptionTestEmail) ;
         assert.notStrictEqual(result, false);
         assert.strictEqual(result, speakeasySecret);
     });

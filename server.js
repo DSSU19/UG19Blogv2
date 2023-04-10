@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const speakeasy = require('speakeasy');
 const qrCode = require('qrcode');
 const session = require('express-session');
+const cookieParser = require('cookie-parser');//Cookie parser being used for the double submit cookie value.
 const { v4: uuid } = require('uuid')
 
 
@@ -24,6 +25,8 @@ const port = 8080;
 app.use(express.static('client'));
 // Body parser middleware
 app.use(bodyParser.json());
+//Use the cookie parser for the double submit cookie.
+app.use(cookieParser());
 //Force input to be encoded correctly.
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -43,7 +46,7 @@ app.use(session({
         secure: true,
         httpOnly:true,
         maxAge:  5 * 60 * 60 * 1000, //Cookies expire after 5 hours, in order to prevent session hijacking
-        sameSite: true,
+        sameSite: 'strict',
     }
 }));
 //Constants for encryption,
@@ -73,8 +76,11 @@ app.use((req,res, next)=>{
     next()
 })
 
+//This is part of the implementation of the CRSF Token mitigations
+app.use(generateCRSFToken);
 
-app.use(generateCRSFTokenV2);
+//This is part of the implementation of the double submit cookies to mitigate against crsf token value:
+app.use(DoubleSubmitCookieImplementation);
 
 //Pg client information to enable queries from the database blog.
 const { Pool } = require('pg');
@@ -116,7 +122,7 @@ server.listen(port, () => {
 
 module.exports = {
     app,signUpValidation, escapeAllInput, userExistsCheck, storePasswordInfo,loginValidation, getPasswordInfo, validateLoginCredentials, searchBarValidation, escapeInput,
-    blogFormDataValidation, validateInputsAll, validateInput, encryptWord, getEncryptionKeys, decryptWord
+    blogFormDataValidation, validateInputsAll, validateInput,  encryptTotpInfo, getEncryptionKeys, decryptTotpInfo, encryptWord, decryptWord
 };
 /*All functions used*/
 
@@ -393,7 +399,11 @@ async function TwoFactorEmail(email, token,res, req) {
     //console.log("Message sent: %s", message.messageId);
     //console.log("Preview URL: %s", nodemailer.getTestMessageUrl(message));
     req.session.csrfToken =  crypto.randomBytes(32).toString('hex');
-    return res.render("verifyToken", { message: email, errors: false, email: email, csrfToken: req.session.csrfToken});
+
+    const doubleSubmitCookie =crypto.randomBytes(32).toString('hex') + process.env.cookie_secret_key;
+    res.cookie('doubleSubmitCookie', doubleSubmitCookie);
+   res.locals.doubleSubmitCookie = doubleSubmitCookie;
+    return res.render("verifyToken", { message: email, errors: false, email: email, csrfToken: req.session.csrfToken, doubleSubmitCookie:res.locals.doubleSubmitCookie});
 }
 
 
@@ -469,26 +479,49 @@ function validateInput(inputJson){
     }
 }
 
-function generateCRSFTokenV2(req, res, next) {
+function generateCRSFToken(req, res, next) {
     const csrfToken = crypto.randomBytes(32).toString('hex');
     const csrfInputFieldName = 'csrftokenvalue';
-
-    if (req.method === 'GET') {
+    if(req.url==="/logout"){
+        return next()
+    }else if (req.method === 'GET') {
         req.session.csrfFieldName = csrfInputFieldName;
         req.session.csrfToken = csrfToken;
     } else if (req.method === 'POST') {
         const reqCsrfToken = req.body[csrfInputFieldName] || req.query[csrfInputFieldName];
         if (!reqCsrfToken || reqCsrfToken !== req.session.csrfToken) {
             console.log('gets in here');
-            return   res.render('index', {errors: "Illegal Request, please refrain from executing such actions!", message: false, csrfToken: req.session.csrfToken})
+            return res.status(403).end()
+            //return   res.render('index', {errors: "Illegal Request, please refrain from executing such actions! Refresh page to login in.", message: false, csrfToken: '', doubleSubmitCookie:''})
         }
-    }
 
+    }
     next();
 }
 
-//This generated a csrf token unique for every session id and includes an expiration time
+function DoubleSubmitCookieImplementation(req, res, next) {
+    let doubleSubmitCookie = crypto.randomBytes(32).toString('hex');
+    //console.log("New value is: " +  doubleSubmitCookie)
+    const cookieInputFieldName = 'doubleSubmitCookie';
+    console.log(req.url)
+    if(req.url ==="/logout"){
+        return next()
+    }else if (req.method === 'GET') {
+        doubleSubmitCookie = doubleSubmitCookie+ process.env.cookie_secret_key;
+        res.cookie('doubleSubmitCookie', doubleSubmitCookie);
+       res.locals.doubleSubmitCookie = doubleSubmitCookie;
+        //console.log("REQUEST: "  +res.locals.doubleSubmitCookie)
+    } else if (req.method === 'POST') {
+        //console.log("POST REQUEST" + req.cookies['doubleSubmitCookie'])
+        console.log("THIS IS POST: " + req.body[cookieInputFieldName], req.cookies['doubleSubmitCookie'])
+        const cookieInputField = req.body[cookieInputFieldName] || req.query[cookieInputFieldName];
+        if (!cookieInputField || cookieInputField !== req.cookies['doubleSubmitCookie']) {
+            return res.status(403).end()
 
+        }
+    }
+    next();
+}
 
 
 function searchBarValidation(input){
@@ -522,7 +555,50 @@ function loginSessionIDRegenerate(email, res, req){
     })
 }
 
-async function encryptWord(word, email){
+ function encryptWord(word){
+    const encryptionKey = crypto.randomBytes(32);
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', encryptionKey, iv);
+    let encryptedWord = cipher.update(word, 'utf8', 'hex') + cipher.final('hex');
+    // Get the authentication tag, this is used to provide an additional layer of security
+    //It is to make sure data doesn't get changed in transmission
+    const authenticationTag = cipher.getAuthTag().toString('hex');
+    //console.log( "Encrypted word" + encryptedWord)
+    //console.log('Authentication tag is ' + authenticationTag)
+    //console.log('encrypt iv ' + iv.toString('hex'))
+     return{
+         encryptionKey: encryptionKey,
+         authenticationTag: authenticationTag,
+         encryptedWord: encryptedWord,
+         iv: iv
+     }
+}
+
+ function decryptWord(encryptedWordObject){
+    const ivBuffer = Buffer.from(encryptedWordObject.iv, 'hex');
+    const authTagBuffer = Buffer.from(encryptedWordObject.authenticationTag, 'hex');
+    //Get encryption key from file name:
+     // console.log(encryption_key_obj)
+    const encryption_key = Buffer.from(encryptedWordObject.encryptionKey);
+    //console.log(encryption_key)
+    if(encryption_key){
+        const decipher = crypto.createDecipheriv('aes-256-gcm',encryption_key , ivBuffer, {
+            authTagLength: 16,
+        });
+        decipher.setAuthTag(authTagBuffer);
+        // Decrypt the encrypted secret using the decipher object
+        let decryptedWord = decipher.update(encryptedWordObject.encryptedWord, 'hex', 'utf8');
+        decryptedWord += decipher.final('utf8');
+        //console.log("Decrypted word:" + decryptedWord)
+        //console.log("Decrypted word " + decryptedWord)
+        return decryptedWord;
+    }else{
+        return false;
+    }
+}
+
+
+async function encryptTotpInfo(word, email){
     const keyFileName = process.env.NODE_ENV === "test" ? 'test/info/test_keys.json': 'info/keys.json';
     const encryptionKey = crypto.randomBytes(32);
     const iv = crypto.randomBytes(12);
@@ -545,7 +621,7 @@ async function encryptWord(word, email){
 
 }
 
-async function decryptWord(storedEncryptedWord, email){
+async function decryptTotpInfo(storedEncryptedWord, email){
     const keyFileName = process.env.NODE_ENV === "test" ? 'test/info/test_keys.json': 'info/keys.json';
     const iv = storedEncryptedWord.slice(-56, -32);// Get the next 24 characters after the last 32 characters
     const encryptedWord = storedEncryptedWord.slice(0,  storedEncryptedWord.indexOf(iv)); //Get from the beginning till the iv
@@ -578,18 +654,23 @@ async function decryptWord(storedEncryptedWord, email){
 
 /*All the application get routes*/
 //Routes
-app.get('/', (req, res) => {
-    console.log('Session ID:', req.sessionID);
-    res.render('index', {errors: false, message: false, csrfToken: req.session.csrfToken})
+
+//Any unassigned routes.
+
+app.get('/',(req, res) => {
+/*    const encryptedCookieStr = req.signedCookies.doubleSubmitCookie;
+    const encryptedCookieObj = JSON.parse(encryptedCookieStr);
+    const doubleSubmitCookie = decryptWord(encryptedCookieObj);*/
+    res.render('index', {errors: false, message: false, csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie })
 });
 
 app.get('/sign-up', (req, res) => {
-    res.render('sign-up', {errors: false, message: false,  csrfToken: req.session.csrfToken})
+    res.render('sign-up', {errors: false, message: false,  csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie})
 });
 
 
 app.get('/email-verification', (req,res)=>{
-    res.render('email-verification', {email: false, csrfToken: req.session.csrfToken})
+    res.render('email-verification', {email: false, csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie })
 })
 
 app.get('/setup-totp', (req, res)=>{
@@ -598,9 +679,9 @@ app.get('/setup-totp', (req, res)=>{
         qrCode.toDataURL(secret.otpauth_url, function(err, qrCodeData) {
             if (err) {
                 console.log(err);
-                res.render('setup-totp', { qrCodeData: null, secret: null, errors:"An error occured please try again", email: null, message: false, csrfToken: req.session.csrfToken  });
+                res.render('setup-totp', { qrCodeData: null, secret: null, errors:"An error occurred please try again", email: null, message: false, csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie });
             } else {
-                res.render('setup-totp', { qrCodeData: qrCodeData, secret: secret.base32, errors:false, email: req.session.verifiedTotpUserEmail, message: 'Your email has been verified', csrfToken: req.session.csrfToken});
+                res.render('setup-totp', { qrCodeData: qrCodeData, secret: secret.base32, errors:false, email: req.session.verifiedTotpUserEmail, message: 'Your email has been verified', csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie});
             }
         });
 
@@ -610,7 +691,7 @@ app.get('/setup-totp', (req, res)=>{
 })
 app.get('/verify-totp', (req, res)=>{
     if( req.session.totpLoginUserMail){
-        res.render('verify-totp', {errors: false , csrfToken: req.session.csrfToken})
+        res.render('verify-totp', {errors: false , csrfToken: req.session.csrfToken,  doubleSubmitCookie: res.locals.doubleSubmitCookie})
 
     }else{
         return res.redirect('/')
@@ -626,7 +707,7 @@ app.get('/blogDashboard', (req, res)=>{
         //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
         if(userTimedOut) {
             res.clearCookie('connect.sid');
-            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken})
+            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie})
         }else{
             res.redirect('/')
         }
@@ -753,6 +834,10 @@ app.get('/search', (req, res) => {
         }
     }
 });
+
+app.get('*', (req,res)=>{
+    res.redirect('/')
+})
 
 
 
@@ -903,11 +988,11 @@ app.post('/login', async (req, res)=>{
             }
 
         }else{
-            res.render('index', {errors: "Username and/or password is incorrect", message: false, qrCodeData: false,csrfToken: req.session.csrfToken })
+            res.render('index', {errors: "Username and/or password is incorrect", message: false, qrCodeData: false,csrfToken: req.session.csrfToken, doubleSubmitCookie:res.locals.doubleSubmitCookie })
         }
         //console.log(email,password)
     }else{
-        res.render('index', {errors: "Username and/or password is incorrect", message: false, csrfToken: req.session.csrfToken})
+        res.render('index', {errors: "Username and/or password is incorrect", message: false, csrfToken: req.session.csrfToken, doubleSubmitCookie:res.locals.doubleSubmitCookie})
     }
 
 })
@@ -924,7 +1009,7 @@ app.post('/setup-totp',  async(req, res)=>{
     }else{
         email = escapeInput(email);
         secret= escapeInput(secret);
-        const encrypted_secret = await encryptWord(secret, email);
+        const encrypted_secret = await encryptTotpInfo(secret, email);
         if(encrypted_secret){
             //const hashedSecret = crypto.createHash('sha256').update(secret).digest('hex');
             console.log(encrypted_secret)
@@ -960,7 +1045,7 @@ app.post('/verify-totp', async function(req, res) {
     let results = await pool.query(selectSecret);
     results = results.rows[0].secret
     console.log(results)
-    const decrypted_secret = await decryptWord(results, userEmail)
+    const decrypted_secret = await decryptTotpInfo(results, userEmail)
     console.log(decrypted_secret)
     if(decrypted_secret){
         const token = req.body.token;
@@ -1028,7 +1113,7 @@ app.post('/twofa', (req,res)=>{
                            })
                        })
                }else{
-                   res.render('verifyToken', {errors:'Invalid token', email:email, message: email, csrfToken: req.session.csrfToken})
+                   res.render('verifyToken', {errors:'Invalid token', email:email, message: email, csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie})
                }
            })
 })
@@ -1040,6 +1125,7 @@ app.post('/logout', (req, res)=> {
             res.status(500).send('Server Error');
         } else {
             res.clearCookie('connect.sid');
+            res.clearCookie('doubleSubmitCookie')
             res.redirect('/');
         }
     });

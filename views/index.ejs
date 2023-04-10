@@ -22,6 +22,7 @@
     <form action="/login" method="post">
         <div class="form-input-group">
             <input type="hidden" id="csrftokenvalue" name="csrftokenvalue" value="<%=csrfToken%>">
+            <input type="hidden" id="doubleSubmitCookie" name="doubleSubmitCookie" value="<%=doubleSubmitCookie%>">
         </div>
         <div class="form-input-group">
             <label for="email">Email</label><br>
