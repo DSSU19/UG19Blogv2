@@ -8,6 +8,10 @@ body{
     width: 10%;
 }
 
+#location, #Username{
+    display: none;
+}
+
 .nav-items{
     display: flex;
     justify-content: center;

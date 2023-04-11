@@ -103,6 +103,8 @@ app.use((req,res, next)=>{
     next()
 })
 
+//This is the additional mitigation implementation to mitigate against bots.
+app.use(botDetector);
 //This is part of the implementation of the CRSF Token mitigations
 app.use(generateCRSFToken);
 
@@ -149,7 +151,7 @@ server.listen(port, () => {
 
 module.exports = {
     app,signUpValidation, escapeAllInput, userExistsCheck, storePasswordInfo,loginValidation, getPasswordInfo, validateLoginCredentials, searchBarValidation, escapeInput,
-    blogFormDataValidation, validateInputsAll, validateInput,  encryptTotpInfo, getEncryptionKeys, decryptTotpInfo, encryptWord, decryptWord
+    blogFormDataValidation, validateInputsAll, validateInput,  encryptTotpInfo, getEncryptionKeys, decryptTotpInfo, encryptWord, decryptWord, limiter
 };
 /*All functions used*/
 
@@ -319,6 +321,8 @@ async function sendVerificationEmail(email, token,res, req) {
 
 
 
+
+
 /*Login functions*/
 //Login valid function
 function loginValidation(reqBody){
@@ -327,7 +331,10 @@ function loginValidation(reqBody){
     const emailRegex = /^([a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9\-\.]+)\.([a-zA-Z]{2,63})$/;
     for (const inputName in reqBody) {
         const input = reqBody[inputName];
-        if(!input ||input.length < 1 ||(inputName==="password" && !passwordRegex.test(input))
+        if (inputName==="username" && input){
+            console.log('This is a bot error')
+            isValid = false;
+        }else if(!input ||input.length < 1 ||(inputName==="password" && !passwordRegex.test(input))
             || (inputName ==="email" && !emailRegex.test(input)) || (inputName==="passwordConfirmation") && input !== reqBody["password"]
         ){
             isValid = false;
@@ -507,6 +514,32 @@ function validateInput(inputJson){
     }
 }
 
+
+function botDetector(req,res, next){
+    const namesArray = ["username", 'location'];
+    //console.log('bot detector is being used')
+    let honeyPotInputFieldName;
+    //console.log(req.url)
+    switch(req.url ){
+        case "/login":
+        honeyPotInputFieldName = req.body[namesArray[0]]
+            if(honeyPotInputFieldName){
+                //console.log('honey pot in the login')
+                return res.render('index', {errors: "You are a bot! No entry for you.", message: false, csrfToken: '', doubleSubmitCookie:''})
+            }
+            break;
+        case "/sign-up":
+            honeyPotInputFieldName = req.body[namesArray[0]]
+            //console.log('honey pot in the sign-up')
+            if(honeyPotInputFieldName){
+                return res.render('index', {errors: "You are a bot! No entry for you.", message: false, csrfToken: '', doubleSubmitCookie:''})
+            }
+            break;
+    }
+    next()
+}
+
+
 function generateCRSFToken(req, res, next) {
     const csrfToken = crypto.randomBytes(32).toString('hex');
     const csrfInputFieldName = 'csrftokenvalue';
@@ -541,10 +574,9 @@ function DoubleSubmitCookieImplementation(req, res, next) {
         //console.log("REQUEST: "  +app.locals.doubleSubmitCookie)
     } else if (req.method === 'POST') {
         //app.locals.doubleSubmitCookie = doubleSubmitCookie
-        console.log( "This is app.locals.doubleSubmitCookie: " + app.locals.doubleSubmitCookie );
+        //console.log( "This is app.locals.doubleSubmitCookie: " + app.locals.doubleSubmitCookie );
         //console.log("POST REQUEST" + req.cookies['doubleSubmitCookie'])
-        console.log("THIS IS POST: " + req.body[cookieInputFieldName], req.cookies['doubleSubmitCookie'])
-
+        //console.log("THIS IS POST: " + req.body[cookieInputFieldName], req.cookies['doubleSubmitCookie'])
         const cookieInputField = req.body[cookieInputFieldName] || req.query[cookieInputFieldName];
         if (!cookieInputField || cookieInputField !== req.cookies['doubleSubmitCookie']) {
             return res.status(403).end()
@@ -552,6 +584,9 @@ function DoubleSubmitCookieImplementation(req, res, next) {
     }
     next();
 }
+
+
+
 
 
 function searchBarValidation(input){
