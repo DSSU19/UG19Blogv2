@@ -103,8 +103,7 @@ app.use((req,res, next)=>{
     next()
 })
 
-//This is the additional mitigation implementation to mitigate against bots.
-app.use(botDetector);
+
 //This is part of the implementation of the CRSF Token mitigations
 app.use(generateCRSFToken);
 
@@ -164,7 +163,9 @@ function signUpValidation(reqBody){
         email: "Please enter a valid email address",
         passwordConfirmation: "Passwords do not match.",
         authmethod:'There is something wrong with your authMethod',
-        csrftokenvalue: 'Unauthorised post request'
+        csrftokenvalue: 'Unauthorised post request',
+        location: 'You are a bot! No entry for you.'
+
     };
     const errors = [];
    // const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
@@ -173,7 +174,11 @@ function signUpValidation(reqBody){
     const usernameRegex= /^[a-z0-9]+$/i;
     for (const inputName in reqBody) {
         const input = reqBody[inputName];
-        if(!input ||input.length < 1 ||(inputName==="username" && !usernameRegex.test(input)) ||(inputName==="password" && !passwordRegex.test(input))
+
+        if(inputName==="location" && input){
+            errors.push(errorMessages[inputName]);
+            console.log(errorMessages[inputName]);
+        }else if(!input ||input.length < 1 ||(inputName==="username" && !usernameRegex.test(input)) ||(inputName==="password" && !passwordRegex.test(input))
             || (inputName ==="email" && !emailRegex.test(input)) || ((inputName==="passwordConfirmation") && input !== reqBody["password"])|| ((inputName==="authmethod") && (input!=="email") && (input!=="totp"))
             || ((inputName==="csrftokenvalue")&& !usernameRegex.test(input)) || input===undefined
         ){
@@ -331,7 +336,7 @@ function loginValidation(reqBody){
     const emailRegex = /^([a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9\-\.]+)\.([a-zA-Z]{2,63})$/;
     for (const inputName in reqBody) {
         const input = reqBody[inputName];
-        if (inputName==="username" && input){
+        if (inputName==="Username" && input){
             console.log('This is a bot error')
             isValid = false;
         }else if(!input ||input.length < 1 ||(inputName==="password" && !passwordRegex.test(input))
@@ -515,29 +520,6 @@ function validateInput(inputJson){
 }
 
 
-function botDetector(req,res, next){
-    const namesArray = ["username", 'location'];
-    //console.log('bot detector is being used')
-    let honeyPotInputFieldName;
-    //console.log(req.url)
-    switch(req.url ){
-        case "/login":
-        honeyPotInputFieldName = req.body[namesArray[0]]
-            if(honeyPotInputFieldName){
-                //console.log('honey pot in the login')
-                return res.render('index', {errors: "You are a bot! No entry for you.", message: false, csrfToken: '', doubleSubmitCookie:''})
-            }
-            break;
-        case "/sign-up":
-            honeyPotInputFieldName = req.body[namesArray[0]]
-            //console.log('honey pot in the sign-up')
-            if(honeyPotInputFieldName){
-                return res.render('index', {errors: "You are a bot! No entry for you.", message: false, csrfToken: '', doubleSubmitCookie:''})
-            }
-            break;
-    }
-    next()
-}
 
 
 function generateCRSFToken(req, res, next) {
