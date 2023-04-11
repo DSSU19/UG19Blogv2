@@ -11,9 +11,15 @@ const qrCode = require('qrcode');
 const session = require('express-session');
 const cookieParser = require('cookie-parser');//Cookie parser being used for the double submit cookie value.
 const { v4: uuid } = require('uuid')
+//import rateLimiter from 'express-rate-limit'
+
+const rateLimiter = require('express-rate-limit');
+
+
 
 
 const app = express();
+
 // Middleware and server set up
 app.use(bodyParser.urlencoded({ extended: false }));
 app.set('view engine', 'ejs');
@@ -23,12 +29,13 @@ const port = 8080;
 
 
 app.use(express.static('client'));
-// Body parser middleware
-app.use(bodyParser.json());
 //Use the cookie parser for the double submit cookie.
 app.use(cookieParser());
+// Body parser middleware
+app.use(bodyParser.json());
 //Force input to be encoded correctly.
 app.use(bodyParser.urlencoded({ extended: true }));
+
 
 app.use(session({
     secret: process.env.secret_key,
@@ -49,7 +56,27 @@ app.use(session({
         sameSite: 'strict',
     }
 }));
-//Constants for encryption,
+
+//This is to prevent a DDOS Attack
+const limiter = rateLimiter({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // Limit each IP to 100 requests per `window` (here, per 15 minutes)
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    message: "Too many request is being made from this IP, please try again later",
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+})
+
+app.use(limiter)
+
+const loginLimiter = rateLimiter({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 5, // Limit each IP to 5 login requests per `window` (here, per hour)
+    message:
+        'Too many login attempts from this IP in the past hour, please try again after an hour',
+    standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+    legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+
+})
 
 //Check if there is an active session
 let inActivityTimer = 0
@@ -403,8 +430,8 @@ async function TwoFactorEmail(email, token,res, req) {
     let doubleSubmitCookie =crypto.randomBytes(32).toString('hex');
     doubleSubmitCookie = crypto.createHmac('sha256', process.env.cookie_secret_key).update(doubleSubmitCookie).digest('hex');
     res.cookie('doubleSubmitCookie', doubleSubmitCookie);
-   res.locals.doubleSubmitCookie = doubleSubmitCookie;
-    return res.render("verifyToken", { message: email, errors: false, email: email, csrfToken: req.session.csrfToken, doubleSubmitCookie:res.locals.doubleSubmitCookie});
+   app.locals.doubleSubmitCookie = doubleSubmitCookie;
+    return res.render("verifyToken", { message: email, errors: false, email: email, csrfToken: req.session.csrfToken, doubleSubmitCookie:app.locals.doubleSubmitCookie});
 }
 
 
@@ -509,12 +536,15 @@ function DoubleSubmitCookieImplementation(req, res, next) {
         return next()
     }else if (req.method === 'GET') {
         doubleSubmitCookie = crypto.createHmac('sha256', process.env.cookie_secret_key).update(doubleSubmitCookie).digest('hex');
+        app.locals.doubleSubmitCookie = doubleSubmitCookie;
         res.cookie('doubleSubmitCookie', doubleSubmitCookie);
-       res.locals.doubleSubmitCookie = doubleSubmitCookie;
-        //console.log("REQUEST: "  +res.locals.doubleSubmitCookie)
+        //console.log("REQUEST: "  +app.locals.doubleSubmitCookie)
     } else if (req.method === 'POST') {
+        //app.locals.doubleSubmitCookie = doubleSubmitCookie
+        console.log( "This is app.locals.doubleSubmitCookie: " + app.locals.doubleSubmitCookie );
         //console.log("POST REQUEST" + req.cookies['doubleSubmitCookie'])
         console.log("THIS IS POST: " + req.body[cookieInputFieldName], req.cookies['doubleSubmitCookie'])
+
         const cookieInputField = req.body[cookieInputFieldName] || req.query[cookieInputFieldName];
         if (!cookieInputField || cookieInputField !== req.cookies['doubleSubmitCookie']) {
             return res.status(403).end()
@@ -661,16 +691,16 @@ app.get('/',(req, res) => {
 /*    const encryptedCookieStr = req.signedCookies.doubleSubmitCookie;
     const encryptedCookieObj = JSON.parse(encryptedCookieStr);
     const doubleSubmitCookie = decryptWord(encryptedCookieObj);*/
-    res.render('index', {errors: false, message: false, csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie })
+    res.render('index', {errors: false, message: false, csrfToken: req.session.csrfToken, doubleSubmitCookie: app.locals.doubleSubmitCookie })
 });
 
 app.get('/sign-up', (req, res) => {
-    res.render('sign-up', {errors: false, message: false,  csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie})
+    res.render('sign-up', {errors: false, message: false,  csrfToken: req.session.csrfToken, doubleSubmitCookie: app.locals.doubleSubmitCookie})
 });
 
 
 app.get('/email-verification', (req,res)=>{
-    res.render('email-verification', {email: false, csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie })
+    res.render('email-verification', {email: false, csrfToken: req.session.csrfToken, doubleSubmitCookie: app.locals.doubleSubmitCookie })
 })
 
 app.get('/setup-totp', (req, res)=>{
@@ -679,9 +709,9 @@ app.get('/setup-totp', (req, res)=>{
         qrCode.toDataURL(secret.otpauth_url, function(err, qrCodeData) {
             if (err) {
                 console.log(err);
-                res.render('setup-totp', { qrCodeData: null, secret: null, errors:"An error occurred please try again", email: null, message: false, csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie });
+                res.render('setup-totp', { qrCodeData: null, secret: null, errors:"An error occurred please try again", email: null, message: false, csrfToken: req.session.csrfToken, doubleSubmitCookie: app.locals.doubleSubmitCookie });
             } else {
-                res.render('setup-totp', { qrCodeData: qrCodeData, secret: secret.base32, errors:false, email: req.session.verifiedTotpUserEmail, message: 'Your email has been verified', csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie});
+                res.render('setup-totp', { qrCodeData: qrCodeData, secret: secret.base32, errors:false, email: req.session.verifiedTotpUserEmail, message: 'Your email has been verified', csrfToken: req.session.csrfToken, doubleSubmitCookie: app.locals.doubleSubmitCookie});
             }
         });
 
@@ -691,7 +721,7 @@ app.get('/setup-totp', (req, res)=>{
 })
 app.get('/verify-totp', (req, res)=>{
     if( req.session.totpLoginUserMail){
-        res.render('verify-totp', {errors: false , csrfToken: req.session.csrfToken,  doubleSubmitCookie: res.locals.doubleSubmitCookie})
+        res.render('verify-totp', {errors: false , csrfToken: req.session.csrfToken,  doubleSubmitCookie: app.locals.doubleSubmitCookie})
 
     }else{
         return res.redirect('/')
@@ -707,7 +737,7 @@ app.get('/blogDashboard', (req, res)=>{
         //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
         if(userTimedOut) {
             res.clearCookie('connect.sid');
-            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie})
+            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken, doubleSubmitCookie: app.locals.doubleSubmitCookie})
         }else{
             res.redirect('/')
         }
@@ -737,10 +767,10 @@ app.get('/editblog/:id', (req, res)=>{
         };
         pool.query(getBlogPostQuery, (err, result)=>{
             if(err){
-                res.render('editBlog', {errors: 'There was an error with updating the blog', post: '', firstname: req.session.firstname, csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie})
+                res.render('editBlog', {errors: 'There was an error with updating the blog', post: '', firstname: req.session.firstname, csrfToken: req.session.csrfToken, doubleSubmitCookie: app.locals.doubleSubmitCookie})
             }else{
                 const blogPost = result.rows[0]
-                res.render('editBlog', {errors: false, post: blogPost, firstname: req.session.firstname, csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie})
+                res.render('editBlog', {errors: false, post: blogPost, firstname: req.session.firstname, csrfToken: req.session.csrfToken, doubleSubmitCookie: app.locals.doubleSubmitCookie})
             }
         })
 
@@ -748,7 +778,7 @@ app.get('/editblog/:id', (req, res)=>{
         //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
         if(userTimedOut) {
             res.clearCookie('connect.sid');
-            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie})
+            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken, doubleSubmitCookie: app.locals.doubleSubmitCookie})
         }else{
             res.redirect('/')
         }
@@ -761,13 +791,13 @@ app.get('/addBlogPost', (req, res)=>{
         //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
         if(userTimedOut) {
             res.clearCookie('connect.sid');
-            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie})
+            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken, doubleSubmitCookie: app.locals.doubleSubmitCookie})
         }else{
             res.redirect('/')
         }
     }else{
         //console.log(req.session.token)
-        res.render('addBlogPost', {errors:false, csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie})
+        res.render('addBlogPost', {errors:false, csrfToken: req.session.csrfToken, doubleSubmitCookie: app.locals.doubleSubmitCookie})
 
     }
 })
@@ -793,7 +823,7 @@ app.get('/readblog/:id', (req, res) => {
         //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
         if(userTimedOut) {
             res.clearCookie('connect.sid');
-            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie})
+            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken, doubleSubmitCookie: app.locals.doubleSubmitCookie})
         }else{
             res.redirect('/')
         }
@@ -828,7 +858,7 @@ app.get('/search', (req, res) => {
         //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
         if(userTimedOut) {
             res.clearCookie('connect.sid');
-            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie})
+            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken, doubleSubmitCookie: app.locals.doubleSubmitCookie})
         }else{
             res.redirect('/')
         }
@@ -946,7 +976,7 @@ app.post('/email-verification',  (req, res) => {
     }
 })
 
-app.post('/login', async (req, res)=>{
+app.post('/login', loginLimiter, async (req, res)=>{
     if(loginValidation(req.body)){
         const escapedLoginBody= escapeAllInput(req.body);
         const email = escapedLoginBody.email;
@@ -988,11 +1018,12 @@ app.post('/login', async (req, res)=>{
             }
 
         }else{
-            res.render('index', {errors: "Username and/or password is incorrect", message: false, qrCodeData: false,csrfToken: req.session.csrfToken, doubleSubmitCookie:res.locals.doubleSubmitCookie })
+
+            res.render('index', {errors: "Username and/or password is incorrect", message: false, qrCodeData: false,csrfToken: req.session.csrfToken, doubleSubmitCookie:app.locals.doubleSubmitCookie })
         }
         //console.log(email,password)
     }else{
-        res.render('index', {errors: "Username and/or password is incorrect", message: false, csrfToken: req.session.csrfToken, doubleSubmitCookie:res.locals.doubleSubmitCookie})
+        res.render('index', {errors: "Username and/or password is incorrect", message: false, csrfToken: req.session.csrfToken, doubleSubmitCookie:app.locals.doubleSubmitCookie})
     }
 
 })
@@ -1113,7 +1144,7 @@ app.post('/twofa', (req,res)=>{
                            })
                        })
                }else{
-                   res.render('verifyToken', {errors:'Invalid token', email:email, message: email, csrfToken: req.session.csrfToken, doubleSubmitCookie: res.locals.doubleSubmitCookie})
+                   res.render('verifyToken', {errors:'Invalid token', email:email, message: email, csrfToken: req.session.csrfToken, doubleSubmitCookie: app.locals.doubleSubmitCookie})
                }
            })
 })
@@ -1244,11 +1275,11 @@ app.post('/addBlogPost', (req, res)=>{
                         res.redirect('/blogDashboard')})
                     .catch(err=>{
                         console.log(err)
-                        res.render('addBlogPost', {errors: 'There was an error with adding the blog post', csrfToken:req.session.token, doubleSubmitCookie: res.locals.doubleSubmitCookie})
+                        res.render('addBlogPost', {errors: 'There was an error with adding the blog post', csrfToken:req.session.token, doubleSubmitCookie: app.locals.doubleSubmitCookie})
                     })
             }).catch(err=>{
                 console.log(err)
-                res.render('addBlogPost', {errors: 'There was an error with adding the blog post',csrfToken:req.session.token, doubleSubmitCookie: res.locals.doubleSubmitCookie })
+                res.render('addBlogPost', {errors: 'There was an error with adding the blog post',csrfToken:req.session.token, doubleSubmitCookie: app.locals.doubleSubmitCookie })
             })
             console.log(blogTitle);
             console.log(blogData);
