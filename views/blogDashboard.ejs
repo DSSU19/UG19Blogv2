@@ -33,7 +33,6 @@
                             <form action="/deleteblog/<%= post.id %>" method="post">
                                 <div class="input_labels">
                                     <input type="hidden" name="csrftokenvalue" value="<%= csrfToken %>">
-                                    <input type="hidden" id="doubleSubmitCookie" name="doubleSubmitCookie" value="<%=doubleSubmitCookie%>">
                                 </div>
                                 <button type="submit">Delete</button>
                             </form>
