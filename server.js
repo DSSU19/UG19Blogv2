@@ -58,14 +58,14 @@ app.use(session({
 }));
 
 app.use((req, res, next) => {
-    if (!req.session.csrfToken){
+    if (!req.session.csrfToken || req.session.csrfTokenExpiry < Date.now()){
         req.session.csrfToken = crypto.createHmac('sha256', process.env.token_secret_key).update(crypto.randomBytes(32).toString('hex')).digest('hex');
+        //const thirtyMinutesTimer = 1800000
+        const twoMinutesTimer = 120000 //Two minutes for testing
+        req.session.csrfTokenExpiry = Date.now() + twoMinutesTimer;
     }else{
         console.log('A session token already exists')
     }
-        //res.locals.csrfToken = req.session.csrfToken;
-
-
     next();
 });
 
@@ -670,7 +670,6 @@ async function decryptTotpInfo(storedEncryptedWord, email){
 
 app.get('/',(req, res) => {
     console.log(req.session)
-
     res.render('index', {errors: false, message: false, csrfToken: req.session.csrfToken})
 });
 
