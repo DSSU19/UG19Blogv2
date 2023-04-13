@@ -58,12 +58,17 @@ app.use(session({
 }));
 
 app.use((req, res, next) => {
+    //console.log(req.sessionID)
+    console.log(req.session.csrfToken || Date.now() > req.session.csrfTokenExpiry)
 
-    if (!req.session.csrfToken || req.session.csrfTokenExpiry < Date.now()){
+    if(req.url==="/logout"){
+        return next()
+    }else if (!req.session.csrfToken||  Date.now() > req.session.csrfTokenExpiry){
         req.session.csrfToken = crypto.createHmac('sha256', process.env.token_secret_key).update(crypto.randomBytes(32).toString('hex')).digest('hex');
         //const thirtyMinutesTimer = 1800000
-        const twoMinutesTimer = 120000 //Two minutes for testing
-        req.session.csrfTokenExpiry = Date.now() + twoMinutesTimer;
+        //const twoMinutesTimer = 120000 //Two minutes for testing
+        const thirtyMinutesTimer = 1000*60*45
+        req.session.csrfTokenExpiry = Date.now() + thirtyMinutesTimer;
     }
     if (req.method==="POST" && (!req.body['csrftokenvalue'] || req.body['csrftokenvalue'] !== req.session.csrfToken )){
         console.log('Post Data: ' + req.body['csrftokenvalue'], req.session.csrfToken)
@@ -173,6 +178,14 @@ const pool = new Pool({
     user: process.env.user,
     database: databaseName,
     password:  process.env.password,
+});
+
+const readOnlyPool = new Pool({
+    host: process.env.localhost,
+    port: process.env.port,
+    user: process.env.readOnlyUser,
+    database: databaseName,
+    password:  process.env.readOnlyUserPassword,
 });
 
 //Transporter for sending emails:
@@ -464,7 +477,7 @@ async function validateLoginCredentials(password, email){
             values: [email, hashedPassword, true] // 24 hours in milliseconds
         };
         try {
-            const result = await pool.query(userQuery);
+            const result = await readOnlyPool.query(userQuery);
             //console.log(result.rows[0])
             if(result.rows.length > 0){
                 return {credentialsValid: true, authMethod: result.rows[0].authmethod};
