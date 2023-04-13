@@ -58,22 +58,21 @@ app.use(session({
 }));
 
 app.use((req, res, next) => {
+
     if (!req.session.csrfToken || req.session.csrfTokenExpiry < Date.now()){
         req.session.csrfToken = crypto.createHmac('sha256', process.env.token_secret_key).update(crypto.randomBytes(32).toString('hex')).digest('hex');
         //const thirtyMinutesTimer = 1800000
         const twoMinutesTimer = 120000 //Two minutes for testing
         req.session.csrfTokenExpiry = Date.now() + twoMinutesTimer;
-    }else{
-        console.log('A session token already exists')
     }
-
-    if (req.method==="POST" && (! req.body['csrftokenvalue'] || req.body['csrftokenvalue'] !== req.session.csrfToken )){
-        console.log('CSRF Token')
-    }else{
-        console.log('Not detected')
+    if (req.method==="POST" && (!req.body['csrftokenvalue'] || req.body['csrftokenvalue'] !== req.session.csrfToken )){
+        console.log('Post Data: ' + req.body['csrftokenvalue'], req.session.csrfToken)
+        return res.status(403).end();
     }
     next();
 });
+
+
 
 //This is to prevent a DDOS Attack
 const limiter = rateLimiter({
@@ -103,7 +102,7 @@ let userTimedOut = false;
 app.use((req,res, next)=>{
     //If the user interacts with the website
     if(req.session.usermail || req.session.verifiedTotpUserEmail || req.session.totpLoginUserMail){
-        console.log('I am in here')
+        //console.log('I am in here')
         //Stop the timer
         clearTimeout(inActivityTimer)
         //Reset the timer again
@@ -120,10 +119,6 @@ app.use((req,res, next)=>{
     }
     next()
 })
-//This is part of the implementation of the CRSF Token mitigations
-
-//This is part of the implementation of the double submit cookies to mitigate against crsf token value:
-
 
 //Pg client information to enable queries from the database blog.
 const { Pool } = require('pg');
@@ -183,7 +178,6 @@ function signUpValidation(reqBody){
 
     };
     const errors = [];
-   // const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
     const passwordRegex = /(?=.{8,}$)(?=.*[a-zA-Z0-9]).*/
     const emailRegex = /^([a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9\-\.]+)\.([a-zA-Z]{2,63})$/;
     const usernameRegex= /^[a-z0-9]+$/i;
@@ -676,7 +670,7 @@ async function decryptTotpInfo(storedEncryptedWord, email){
 //Any unassigned routes.
 
 app.get('/',(req, res) => {
-    console.log(req.session)
+    //console.log('Original CSRF Token: ', req.session.csrfToken)
     res.render('index', {errors: false, message: false, csrfToken: req.session.csrfToken})
 });
 
@@ -728,7 +722,8 @@ app.get('/blogDashboard', (req, res)=>{
             res.redirect('/')
         }
     }else{
-        console.log('Session ID:', req.sessionID);
+        //console.log('Session ID:', req.sessionID);
+        //console.log('CSRF Token', req.session.csrfToken)
         //Get all the blog posts from the database:
         const getAllPostQuery = {
             text: 'SELECT * FROM blogdata ORDER BY datecreated DESC ',
