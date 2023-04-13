@@ -73,6 +73,48 @@ app.use((req, res, next) => {
 });
 
 
+app.use('/login', (req,res,next)=>{
+    if(req.session){
+        //Check if the user has been able to successfully login
+        //console.log('session-based-rate limiting be implemented')
+        if(!req.session.usermail){
+            const now = new Date();
+                if(!req.session.loginAttempts){
+                    req.session.loginAttempts = 1
+                }else{
+                    req.session.loginAttempts +=1;
+                }
+            if(req.session.loginAttempts > 5){
+                console.log('You have too  many login attempts')
+                // Check if the last login attempt was more than an hour ago
+                const lastAttempt = new Date(req.session.lastLoginAttempt || 0);
+                const elapsed = now - lastAttempt;
+                const fiveMinuteTester = 1000*60*5
+                const fifteenMinuteTimer= 15 * 60 * 1000
+                if (elapsed <fiveMinuteTester ) {
+                    const remainingTime = fiveMinuteTester - elapsed;
+                    const remainingMinutes = Math.ceil(remainingTime / 60000);
+                    res.render('index', {
+                        errors: `Too many login attempts. Please try again after ${remainingMinutes} minute(s).`,
+                        message: false, csrfToken: req.session.csrfToken
+                    })
+                    return;
+                }
+                if (elapsed >= fiveMinuteTester) {
+                    // Reset loginAttempts count
+                    req.session.loginAttempts = 0;
+                }
+
+            }
+            req.session.lastLoginAttempt = now.getTime();
+            console.log("Login Attempts: "+  req.session.loginAttempts)
+            //Increase number of login attempts count
+        }
+    }
+    next()
+})
+
+
 
 //This is to prevent a DDOS Attack
 const limiter = rateLimiter({
@@ -957,7 +999,7 @@ app.post('/email-verification',  (req, res) => {
     }
 })
 
-app.post('/login', loginLimiter, async (req, res)=>{
+app.post('/login', async (req, res)=>{
     if(loginValidation(req.body)){
         const escapedLoginBody= escapeAllInput(req.body);
         const email = escapedLoginBody.email;
