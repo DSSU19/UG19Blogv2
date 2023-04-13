@@ -66,6 +66,12 @@ app.use((req, res, next) => {
     }else{
         console.log('A session token already exists')
     }
+
+    if (req.method==="POST" && (! req.body['csrftokenvalue'] || req.body['csrftokenvalue'] !== req.session.csrfToken )){
+        console.log('CSRF Token')
+    }else{
+        console.log('Not detected')
+    }
     next();
 });
 
@@ -184,11 +190,10 @@ function signUpValidation(reqBody){
     for (const inputName in reqBody) {
         const input = reqBody[inputName];
 
-        if(inputName==="location" && input){
-            errors.push(errorMessages[inputName]);
-            console.log(errorMessages[inputName]);
-        }else if((!input && inputName==="location")
-            ||(input.length < 1 && inputName==="location")
+       if(
+            (inputName==="location" &&input)
+            ||(!input && inputName!=="location")
+            ||(input.length < 1 && inputName!=="location")
             ||(inputName==="username" && !usernameRegex.test(input))
             ||(inputName==="password" && !passwordRegex.test(input))
             || (inputName ==="email" && !emailRegex.test(input))
@@ -349,11 +354,13 @@ function loginValidation(reqBody){
     const emailRegex = /^([a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9\-\.]+)\.([a-zA-Z]{2,63})$/;
     for (const inputName in reqBody) {
         const input = reqBody[inputName];
-        if (inputName==="Username" && input){
-            console.log('This is a bot error')
-            isValid = false;
-        }else if(!input ||input.length < 1 ||(inputName==="password" && !passwordRegex.test(input))
-            || (inputName ==="email" && !emailRegex.test(input)) || (inputName==="passwordConfirmation") && input !== reqBody["password"]
+        if(
+            (inputName ==="Username" && input)
+            ||(!input && inputName!=="Username")
+            ||(input.length < 1 && inputName!=="Username")
+            ||(inputName==="password" && !passwordRegex.test(input))
+            || (inputName ==="email" && !emailRegex.test(input))
+            || (inputName==="passwordConfirmation") && input !== reqBody["password"]
         ){
             isValid = false;
         }
@@ -997,11 +1004,12 @@ app.post('/login', loginLimiter, async (req, res)=>{
             }
 
         }else{
-
+            console.log('Invalid credentials')
             res.render('index', {errors: "Username and/or password is incorrect", message: false, qrCodeData: false,csrfToken: req.session.csrfToken })
         }
         //console.log(email,password)
     }else{
+        console.log('Invalid user data')
         res.render('index', {errors: "Username and/or password is incorrect", message: false, csrfToken: req.session.csrfToken})
     }
 
