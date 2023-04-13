@@ -303,7 +303,7 @@ function escapeInput(input) {
             values: [email] // 24 hours in milliseconds
         };
         //need to have a handle on when the user has signed up but isn't verified.
-        pool.query(userSelectQuery)
+        readOnlyPool.query(userSelectQuery)
             .then((result) => {
                 //console.log(result.rows[0])
                 if (result.rows.length > 0) {
@@ -612,7 +612,7 @@ function loginSessionIDRegenerate(email, res, req){
             //Get users email and place it in the session
             req.session.usermail = email;
             //Set the session firstname
-            pool.query(nameQuery).then((results)=>{
+            readOnlyPool.query(nameQuery).then((results)=>{
                 req.session.firstname= results.rows[0].firstname;
                 res.redirect('/blogDashboard');
             })
@@ -783,7 +783,7 @@ app.get('/blogDashboard', (req, res)=>{
         const getAllPostQuery = {
             text: 'SELECT * FROM blogdata ORDER BY datecreated DESC ',
         };
-        pool.query(getAllPostQuery, (err, result)=>{
+        readOnlyPool.query(getAllPostQuery, (err, result)=>{
             if (err){
                 console.error(err);
                 res.render('blogDashboard', {firstname: req.session.firstname, errors: "There was an error retrieving the posts", post: '', usermail:req.session.usermail,  csrfToken: req.session.csrfToken })
