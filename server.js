@@ -58,12 +58,17 @@ app.use(session({
 }));
 
 app.use((req, res, next) => {
+    //console.log(req.sessionID)
+    console.log(req.session.csrfToken || Date.now() > req.session.csrfTokenExpiry)
 
-    if (!req.session.csrfToken || req.session.csrfTokenExpiry < Date.now()){
+    if(req.url==="/logout"){
+        return next()
+    }else if (!req.session.csrfToken||  Date.now() > req.session.csrfTokenExpiry){
         req.session.csrfToken = crypto.createHmac('sha256', process.env.token_secret_key).update(crypto.randomBytes(32).toString('hex')).digest('hex');
         //const thirtyMinutesTimer = 1800000
-        const twoMinutesTimer = 120000 //Two minutes for testing
-        req.session.csrfTokenExpiry = Date.now() + twoMinutesTimer;
+        //const twoMinutesTimer = 120000 //Two minutes for testing
+        const thirtyMinutesTimer = 1000*60*45
+        req.session.csrfTokenExpiry = Date.now() + thirtyMinutesTimer;
     }
     if (req.method==="POST" && (!req.body['csrftokenvalue'] || req.body['csrftokenvalue'] !== req.session.csrfToken )){
         console.log('Post Data: ' + req.body['csrftokenvalue'], req.session.csrfToken)
@@ -173,6 +178,22 @@ const pool = new Pool({
     user: process.env.user,
     database: databaseName,
     password:  process.env.password,
+});
+
+const readOnlyPool = new Pool({
+    host: process.env.localhost,
+    port: process.env.port,
+    user: process.env.readOnlyUser,
+    database: databaseName,
+    password:  process.env.readOnlyUserPassword,
+});
+
+const writeOnlyPool = new Pool({
+    host: process.env.localhost,
+    port: process.env.port,
+    user: process.env.writeOnlyUser,
+    database: databaseName,
+    password:  process.env.writeOnlyUserPassword,
 });
 
 //Transporter for sending emails:
@@ -290,7 +311,7 @@ function escapeInput(input) {
             values: [email] // 24 hours in milliseconds
         };
         //need to have a handle on when the user has signed up but isn't verified.
-        pool.query(userSelectQuery)
+        readOnlyPool.query(userSelectQuery)
             .then((result) => {
                 //console.log(result.rows[0])
                 if (result.rows.length > 0) {
@@ -464,8 +485,8 @@ async function validateLoginCredentials(password, email){
             values: [email, hashedPassword, true] // 24 hours in milliseconds
         };
         try {
-            const result = await pool.query(userQuery);
-            //console.log(result.rows[0])
+            const result = await readOnlyPool.query(userQuery);
+            console.log(result.rows[0])
             if(result.rows.length > 0){
                 return {credentialsValid: true, authMethod: result.rows[0].authmethod};
             }else{
@@ -599,7 +620,7 @@ function loginSessionIDRegenerate(email, res, req){
             //Get users email and place it in the session
             req.session.usermail = email;
             //Set the session firstname
-            pool.query(nameQuery).then((results)=>{
+            readOnlyPool.query(nameQuery).then((results)=>{
                 req.session.firstname= results.rows[0].firstname;
                 res.redirect('/blogDashboard');
             })
@@ -770,7 +791,7 @@ app.get('/blogDashboard', (req, res)=>{
         const getAllPostQuery = {
             text: 'SELECT * FROM blogdata ORDER BY datecreated DESC ',
         };
-        pool.query(getAllPostQuery, (err, result)=>{
+        readOnlyPool.query(getAllPostQuery, (err, result)=>{
             if (err){
                 console.error(err);
                 res.render('blogDashboard', {firstname: req.session.firstname, errors: "There was an error retrieving the posts", post: '', usermail:req.session.usermail,  csrfToken: req.session.csrfToken })
@@ -833,7 +854,7 @@ app.get('/readblog/:id', (req, res) => {
             text: 'SELECT * FROM blogData WHERE id = $1',
             values: [blogId]
         };
-        pool.query(getBlogPostQuery, (err, result) => {
+        readOnlyPool.query(getBlogPostQuery, (err, result) => {
             if (err) {
                 console.error(err);
                 res.render('error', {errors: 'There was an error retrieving the blog post', firstname: req.session.firstname, post:'' });
@@ -866,7 +887,7 @@ app.get('/search', (req, res) => {
                 text: 'SELECT * FROM blogdata WHERE blogtitle ILIKE $1 OR bloginfo ILIKE $1 OR blogauthor ILIKE $1 OR blogdescription ILIKE $1',
                 values: [`%${query}%`],
             };
-            pool.query(likeQuery, (err, result) => {
+            readOnlyPool.query(likeQuery, (err, result) => {
                 if (err) {
                     console.error('Error executing query', err);
                     return res.status(500).send('An error occurred while searching for posts.');
@@ -1284,7 +1305,7 @@ app.post('/addBlogPost', (req, res)=>{
                 text: 'SELECT id FROM users WHERE email = $1',
                 values: [author],  // 24 hours in milliseconds
             }
-            pool.query(userIDQuery).then((results)=>{
+            writeOnlyPool.query(userIDQuery).then((results)=>{
                 let user_id = results.rows[0].id
                 //console.log(user_id)
                 const insertQuery = {
@@ -1298,11 +1319,11 @@ app.post('/addBlogPost', (req, res)=>{
                         res.redirect('/blogDashboard')})
                     .catch(err=>{
                         console.log(err)
-                        res.render('addBlogPost', {errors: 'There was an error with adding the blog post', csrfToken:req.session.token})
+                        res.render('addBlogPost', {errors: 'There was an error with adding the blog post', csrfToken:req.session.csrfToken})
                     })
             }).catch(err=>{
                 console.log(err)
-                res.render('addBlogPost', {errors: 'There was an error with adding the blog post',csrfToken:req.session.token })
+                res.render('addBlogPost', {errors: 'There was an error with adding the blog post',csrfToken:req.session.csrfToken })
             })
             console.log(blogTitle);
             console.log(blogData);
