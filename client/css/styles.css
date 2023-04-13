@@ -1,5 +1,7 @@
 body{
-    margin: 0;
+    overflow: hidden;
+    margin:0px;
+
 }
 
 /*Login and Sign-Up Navs*/
@@ -42,50 +44,16 @@ HEADER CSS STARTS HERE
     position: relative;
     overflow: hidden;
     width: 100%;
+    font-size: 25px;
     min-height: 36px;
-    padding: 60px;
+    padding: 30px;
     background: #1abc9c;
-    margin-bottom: 50px;
-}
-
-
-
-
-.h-word{
-    animation: col-animation 5s linear infinite;
-    margin: 0 auto;
-    text-align: center;
-    font-size: 50px;
+    margin-bottom: 40px;
     color: white;
-}
-.h-word-1{
-    --color-1: #DF8453;
-    --color-2: #3d8dae;
-    --color-3: #E4A9A8;
-
+    font-family: Verdana, Geneva, Tahoma, sans-serif;
 }
 
-.h-word-2 {
-    --color-1: #DBAD4A;
-    --color-2: #ACCFCB;
-    --color-3: #17494D;
-}
-  
-.h-word-3 {
-    --color-1: #ACCFCB;
-    --color-2: #E4A9A8;
-    --color-3: #ACCFCB;
-}
 
-@keyframes col-animation {
-    0%    {color: var(--color-1)}
-    32%   {color: var(--color-1)}
-    33%   {color: var(--color-2)}
-    65%   {color: var(--color-2)}
-    66%   {color: var(--color-3)}
-    99%   {color: var(--color-3)}
-    100%  {color: var(--color-1)}
-  }
 #img1{
     
     position: absolute;
@@ -94,11 +62,12 @@ HEADER CSS STARTS HERE
     width: 150px;
 }
 #img2{
-    
+    overflow: hidden;
     position: absolute;
     width: 150px;
     transform: scaleX(-1);
-    right: 120px; 
+    padding-right: 20px;
+    right: 45px; 
     top: 20px;
 }
 
@@ -107,7 +76,66 @@ END OF HEADER CSS
 */
 
 .form-design{
+    position: relative;
     box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
+    background: linear-gradient(#eeefef, #ffffff 10%);
+    overflow: hidden;
+    padding: 80px;
+    border-radius: 5px;
+    width: 350px;
+    left: 35%;
+
+}
+.form-input-group{
+    position: relative;
+    
+}
+.label{
+    font-size: 20px;
+}
+.form-design input[type=password], .form-design input[type=email] {
+    font-family: 'Lato', Calibri, Arial, sans-serif;
+    font-size: 13px;
+    font-weight: 400;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.8);
+    margin-bottom: 10px;
+
+    /* Size and position */
+    width: 100%;
+    padding: 10px;
+
+    /* Styles */
+    border: none; /* Remove the default border */
+    box-shadow: 
+        inset 0 0 5px rgba(0,0,0,0.1),
+        inset 0 3px 2px rgba(0,0,0,0.1);
+}
+
+.form-design input[type=text] {
+    margin-bottom: 10px;
+}
+h2{
+    text-align: center;
+    font-size: 30px;
+    font-family: "Times New Roman", Times, serif;
+}
+
+
+button{
+    position: relative;
+    left: 35%;
+    background-color: #04AA6D;
+    border: none;
+    color: white;
+    padding: 16px 32px;
+    text-decoration: none;
+    margin: 4px 2px;
+    cursor: pointer;
+    z-index: 2;
+    
+}
+.dont{
+    text-align: center;
 }
 
 .blog-card{
