@@ -45,7 +45,14 @@ app.use(session({
     },
      */
     genid : function (req){
-        return  crypto.randomBytes(16).toString('hex');
+        const sessionID = crypto.randomBytes(16).toString('hex');
+        const encryptionKey = crypto.randomBytes(32);
+        const iv = crypto.randomBytes(16);
+        const cipher = crypto.createCipheriv('aes-256-gcm', encryptionKey, iv);
+        let encryptedSessionID = cipher.update(sessionID, 'utf8', 'hex') + cipher.final('hex');
+        return encryptedSessionID
+
+        //return  crypto.randomBytes(16).toString('hex');
     },
     resave: false,
     saveUninitialized: true,
@@ -65,6 +72,8 @@ app.use((req, res, next) => {
         return next()
     }else if (!req.session.csrfToken||  Date.now() > req.session.csrfTokenExpiry){
         req.session.csrfToken = crypto.createHmac('sha256', process.env.token_secret_key).update(crypto.randomBytes(32).toString('hex')).digest('hex');
+        encryptWord(req.session.csrfToken)
+        //console.log(encryptWord(req.session.csrfToken))
         //const thirtyMinutesTimer = 1800000
         //const twoMinutesTimer = 120000 //Two minutes for testing
         const thirtyMinutesTimer = 1000*60*45
@@ -74,6 +83,8 @@ app.use((req, res, next) => {
         console.log('Post Data: ' + req.body['csrftokenvalue'], req.session.csrfToken)
         return res.status(403).end();
     }
+
+
     next();
 });
 
@@ -630,22 +641,24 @@ function loginSessionIDRegenerate(email, res, req){
     })
 }
 
+
  function encryptWord(word){
     const encryptionKey = crypto.randomBytes(32);
+    //console.log("Printed encryption key: " + encryptionKey)
     const iv = crypto.randomBytes(12);
-    const cipher = crypto.createCipheriv('aes-256-gcm', encryptionKey, iv);
+    const cipher = crypto.createCipheriv('aes-256-gcm', encryptionKey, process.env.encryption_iv);
     let encryptedWord = cipher.update(word, 'utf8', 'hex') + cipher.final('hex');
     // Get the authentication tag, this is used to provide an additional layer of security
     //It is to make sure data doesn't get changed in transmission
     const authenticationTag = cipher.getAuthTag().toString('hex');
     //console.log( "Encrypted word" + encryptedWord)
-    //console.log('Authentication tag is ' + authenticationTag)
+    console.log('Authentication tag is ' + authenticationTag)
     //console.log('encrypt iv ' + iv.toString('hex'))
      return{
-         encryptionKey: encryptionKey,
+         encryptionKey: process.env.encryption_key,
          authenticationTag: authenticationTag,
          encryptedWord: encryptedWord,
-         iv: iv
+         iv: process.env.encryption_iv
      }
 }
 
@@ -933,7 +946,7 @@ app.post('/sign-up',  (req,res)=>{
                     //console.log(res.toString())
                     //Redirect the user to the email verification page in order to prevent account enumeration, but no actual email will be sent to that user
                     //since the user already exists in the system.
-                    res.render('email-verification', {email:email, errors:false})
+                    res.render('email-verification', {email:email, errors:false, csrfToken: req.session.csrfToken})
                 } else {
                     //If user does not already exists in the password then we can hash the password
                     //Call the hashedPassword which is a function that generated a random hash.
@@ -1013,7 +1026,7 @@ app.post('/email-verification',  (req, res) => {
                             }
                         }).catch(err=>console.log(err));
                 }else{
-                    res.render('email-verification', {email: email, errors: "The token you have inputted is invalid"})
+                    res.render('email-verification', {email: email, errors: "The token you have inputted is invalid", csrfToken: req.session.csrfToken})
                 }
             }
         })
