@@ -118,7 +118,7 @@ END OF HEADER CSS
 
 
 h2{
-    /*text-align: center;*/
+    text-align: center;
     font-size: 30px;
     font-family: "Times New Roman", Times, serif;
 }
@@ -131,12 +131,12 @@ h2{
 
 .loginb, .sign-upb{
     position: relative;
-    
+    padding: px;
     text-align: center;
 	background-color: #04AA6D;
 	border: none;
     color: white;
-    padding: 6px 16px;
+    padding: 16px 32px;
     text-decoration: none;
     cursor: pointer;
 	z-index: 2;
