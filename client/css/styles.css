@@ -115,24 +115,24 @@ END OF HEADER CSS
     margin-bottom: 10px;
 }
 h2{
-    text-align: center;
+    /*text-align: center;*/
     font-size: 30px;
     font-family: "Times New Roman", Times, serif;
 }
 
+.center_titles{
+    text-align: center;
+}
+
 
 button{
-    position: relative;
-    left: 35%;
+
     background-color: #04AA6D;
     border: none;
     color: white;
-    padding: 16px 32px;
+    padding: 6px 16px;
     text-decoration: none;
-    margin: 4px 2px;
     cursor: pointer;
-    z-index: 2;
-    
 }
 .dont{
     text-align: center;
@@ -154,9 +154,8 @@ button{
 
 .blog_buttons_forms{
     display: flex;
-    justify-content: flex-start;
-    gap:20px;
-    padding: 3%;
+   gap: 5px;
+    padding: 3% 0 3%;
 
 }
 
