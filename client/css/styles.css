@@ -118,29 +118,37 @@ END OF HEADER CSS
 
 
 h2{
-    text-align: center;
+    /*text-align: center;*/
     font-size: 30px;
     font-family: "Times New Roman", Times, serif;
 }
+
+.center_titles{
+    text-align: center;
+}
+
 
 
 .loginb, .sign-upb{
     position: relative;
     
     text-align: center;
-    background-color: #04AA6D;
-    border: none;
+	background-color: #04AA6D;
+	border: none;
     color: white;
-    padding: 16px 32px;
+    padding: 6px 16px;
     text-decoration: none;
     cursor: pointer;
-    z-index: 2;
+	z-index: 2;
 }
+
 .sign-upb{
     left:41%
 }
 .loginb{
     left:42.5%;
+
+
 }
 .dont{
     text-align: center;
@@ -162,9 +170,8 @@ h2{
 
 .blog_buttons_forms{
     display: flex;
-    justify-content: flex-start;
-    gap:20px;
-    padding: 3%;
+   gap: 5px;
+    padding: 3% 0 3%;
 
 }
 

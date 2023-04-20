@@ -45,7 +45,13 @@ app.use(session({
     },
      */
     genid : function (req){
-        return  crypto.randomBytes(16).toString('hex');
+        const sessionID = crypto.randomBytes(16).toString('hex');
+        const encryptionKey = crypto.randomBytes(32);
+        const iv = crypto.randomBytes(16);
+        const cipher = crypto.createCipheriv('aes-256-gcm', encryptionKey, iv);
+        let encryptedSessionID = cipher.update(sessionID, 'utf8', 'hex') + cipher.final('hex');
+        return encryptedSessionID
+        //return  crypto.randomBytes(16).toString('hex');
     },
     resave: false,
     saveUninitialized: true,
@@ -65,17 +71,39 @@ app.use((req, res, next) => {
         return next()
     }else if (!req.session.csrfToken||  Date.now() > req.session.csrfTokenExpiry){
         req.session.csrfToken = crypto.createHmac('sha256', process.env.token_secret_key).update(crypto.randomBytes(32).toString('hex')).digest('hex');
+        //console.log(encryptWord(req.session.csrfToken))
         //const thirtyMinutesTimer = 1800000
         //const twoMinutesTimer = 120000 //Two minutes for testing
-        const thirtyMinutesTimer = 1000*60*45
-        req.session.csrfTokenExpiry = Date.now() + thirtyMinutesTimer;
+        const fortyFiveMinutesTimer = 1000*60*45
+        req.session.csrfTokenExpiry = Date.now() + fortyFiveMinutesTimer;
     }
     if (req.method==="POST" && (!req.body['csrftokenvalue'] || req.body['csrftokenvalue'] !== req.session.csrfToken )){
         console.log('Post Data: ' + req.body['csrftokenvalue'], req.session.csrfToken)
         return res.status(403).end();
     }
+
+
     next();
 });
+
+
+app.use('/addBlogPost', (req,res,next)=>{
+    //console.log(req.session.csrfToken || Date.now() > req.session.csrfTokenExpiry)
+    if(req.url==="/logout"){
+        return next()
+    }else if (!req.session.doubleSubmitCookie||  Date.now() > req.session.doubleSubmitCookieTokenExpiry){
+        req.session.doubleSubmitCookie = crypto.createHmac('sha256', process.env.token_secret_key).update(crypto.randomBytes(32).toString('hex')).digest('hex');
+        //const twoMinutesTimer = 120000 //Two minutes for testing
+        const fortyFiveMinutesTimer = 1000*60*45
+        req.session.doubleSubmitCookieTokenExpiry = Date.now() + fortyFiveMinutesTimer;
+    }
+    if (req.method==="POST" && (!req.body['doubleSubmitCookie'] || req.body['doubleSubmitCookie'] !== req.session.doubleSubmitCookie )){
+        console.log('Post Data: ' + req.body['doubleSubmitCookie'], req.session.doubleSubmitCookie)
+        return res.status(403).end();
+    }
+    next();
+
+})
 
 
 app.use('/login', (req,res,next)=>{
@@ -145,6 +173,7 @@ const loginLimiter = rateLimiter({
 //Check if there is an active session
 let inActivityTimer = 0
 let userTimedOut = false;
+let thirtyMinuteTimer = 30* 60*1000
 //Reset the inactivity timer whenever the user makes a request (interacts with the websites)
 app.use((req,res, next)=>{
     //If the user interacts with the website
@@ -395,7 +424,7 @@ async function sendVerificationEmail(email, token,res, req) {
     // Message sent: <b658f8ca-6296-ccf4-8306-87d57a0b4321@example.com>
     // Preview only available when sending through an Ethereal account
     console.log("Preview URL: %s", nodemailer.getTestMessageUrl(message));
-    // Preview URL: https://ethereal.email/message/WaQKMgKddxQDoou...
+    // Preview URL: https://etheral.email/message/WaQKMgKddxQDoou...
     return res.render("email-verification", { email: email, errors: false, csrfToken: req.session.csrfToken});
 }
 
@@ -630,24 +659,30 @@ function loginSessionIDRegenerate(email, res, req){
     })
 }
 
+
+
+
+
  function encryptWord(word){
-    const encryptionKey = crypto.randomBytes(32);
+    //const encryptionKey = crypto.randomBytes(32);
+    //console.log("Printed encryption key: " + encryptionKey)
     const iv = crypto.randomBytes(12);
-    const cipher = crypto.createCipheriv('aes-256-gcm', encryptionKey, iv);
+    const cipher = crypto.createCipheriv('aes-256-gcm', process.env.encryption_key, process.env.encryption_iv);
     let encryptedWord = cipher.update(word, 'utf8', 'hex') + cipher.final('hex');
     // Get the authentication tag, this is used to provide an additional layer of security
     //It is to make sure data doesn't get changed in transmission
     const authenticationTag = cipher.getAuthTag().toString('hex');
     //console.log( "Encrypted word" + encryptedWord)
-    //console.log('Authentication tag is ' + authenticationTag)
+    console.log('Authentication tag is ' + authenticationTag)
     //console.log('encrypt iv ' + iv.toString('hex'))
      return{
-         encryptionKey: encryptionKey,
+         encryptionKey: process.env.encryption_key,
          authenticationTag: authenticationTag,
          encryptedWord: encryptedWord,
-         iv: iv
+         iv: process.env.encryption_iv
      }
 }
+
 
  function decryptWord(encryptedWordObject){
     const ivBuffer = Buffer.from(encryptedWordObject.iv, 'hex');
@@ -835,13 +870,13 @@ app.get('/addBlogPost', (req, res)=>{
         //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
         if(userTimedOut) {
             res.clearCookie('connect.sid');
-            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken})
+            res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken, doubleSubmitCookie: req.session.doubleSubmitCookie})
         }else{
             res.redirect('/')
         }
     }else{
         //console.log(req.session.token)
-        res.render('addBlogPost', {errors:false, csrfToken: req.session.csrfToken})
+        res.render('addBlogPost', {errors:false, csrfToken: req.session.csrfToken, doubleSubmitCookie: req.session.doubleSubmitCookie})
 
     }
 })
@@ -933,7 +968,7 @@ app.post('/sign-up',  (req,res)=>{
                     //console.log(res.toString())
                     //Redirect the user to the email verification page in order to prevent account enumeration, but no actual email will be sent to that user
                     //since the user already exists in the system.
-                    res.render('email-verification', {email:email, errors:false})
+                    res.render('email-verification', {email:email, errors:false, csrfToken: req.session.csrfToken})
                 } else {
                     //If user does not already exists in the password then we can hash the password
                     //Call the hashedPassword which is a function that generated a random hash.
@@ -1013,7 +1048,7 @@ app.post('/email-verification',  (req, res) => {
                             }
                         }).catch(err=>console.log(err));
                 }else{
-                    res.render('email-verification', {email: email, errors: "The token you have inputted is invalid"})
+                    res.render('email-verification', {email: email, errors: "The token you have inputted is invalid", csrfToken: req.session.csrfToken})
                 }
             }
         })
@@ -1288,7 +1323,7 @@ app.post('/addBlogPost', (req, res)=>{
     if(req.session.usermail){
         console.log("invalid token")
         if(!blogFormDataValidation(req.body).isValid) {
-            return res.render("addBlogPost", {errors: 'There is an error in your input', csrfToken:req.session.token});
+            return res.render("addBlogPost", {errors: 'There is an error in your input', csrfToken:req.session.token, doubleSubmitCookie: req.session.doubleSubmitCookie});
         }else{
             const escapedReqBody = escapeAllInput(req.body)
             const blogTitle = escapedReqBody.blogTitle
@@ -1319,11 +1354,11 @@ app.post('/addBlogPost', (req, res)=>{
                         res.redirect('/blogDashboard')})
                     .catch(err=>{
                         console.log(err)
-                        res.render('addBlogPost', {errors: 'There was an error with adding the blog post', csrfToken:req.session.csrfToken})
+                        res.render('addBlogPost', {errors: 'There was an error with adding the blog post', csrfToken:req.session.csrfToken, doubleSubmitCookie: req.session.doubleSubmitCookie})
                     })
             }).catch(err=>{
                 console.log(err)
-                res.render('addBlogPost', {errors: 'There was an error with adding the blog post',csrfToken:req.session.csrfToken })
+                res.render('addBlogPost', {errors: 'There was an error with adding the blog post',csrfToken:req.session.csrfToken, doubleSubmitCookie: req.session.doubleSubmitCookie })
             })
             console.log(blogTitle);
             console.log(blogData);
