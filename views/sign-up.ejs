@@ -5,41 +5,43 @@
     <%- include('partials/head') %>
 </head>
 <body>
+
 <%- include('partials/homenav') %>
+<div class = "parent">
 <div class="form-design">
-    <h1>Sign-Up</h1>
+    <h2>Sign-Up</h2>
     <form action="/sign-up" method="post">
         <div class="form-input-group">
             <input type="hidden" id="csrftokenvalue" name="csrftokenvalue" value="<%=csrfToken%>">
             <input type="text"  id="location" name="location" tabindex="-1">
         </div>
         <div class="form-input-group">
-            <label for="email">Email</label><br>
+            <label class= "label" for="email">Email:</label><br>
             <input type="email" id="email" name="email" value="" required><br>
         </div>
         <div class="form-input-group">
-            <label for="username">Username</label><br>
+            <label class= "label" for="username">Username:</label><br>
             <input type="username" id="username" name="username" value="" required><br><br>
         </div>
         <div class="form-input-group">
-            <label for="password">Password</label><br>
+            <label class= "label" for="password">Password:</label><br>
             <input type="password" id="password" name="password" value="" required><br><br>
         </div>
         <div class="form-input-group">
-            <label for="passwordConfirmation">Confirm your password</label><br>
+            <label class= "label" for="passwordConfirmation">Confirm your password:</label><br>
             <input type="password" id="passwordConfirmation" name="passwordConfirmation" value="" required><br><br>
         </div>
 
         <div class="form-input-group">
-            <label for="authmethod">Choose your authentication method:</label><br>
-            <select name="authmethod">
-                <option value="email" title="Authentication via email">Email</option>
-                <option value="totp">Authenticator Apps</option>
+            <label class= "label" for="authmethod">Choose your authentication method:</label><br>
+            <select class= "select" name="authmethod">
+                <option class = "label" value="email" title="Authentication via email">Email</option>
+                <option class= "label"value="totp">Authenticator Apps</option>
             </select>
         </div>
 
         <div class="form-input-group">
-            <button type="submit">Sign up</button>
+            <button class = "sign-upb" type="submit">Sign up</button>
         </div>
         <% if (message) { %>
             <div>
@@ -56,5 +58,6 @@
             </div>
         <% } %>
     </form>
+</div>
 </div>
 </body>

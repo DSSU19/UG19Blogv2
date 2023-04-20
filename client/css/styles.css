@@ -1,7 +1,6 @@
 body{
     overflow: hidden;
-    margin:0px;
-
+    margin: 0px;
 }
 
 /*Login and Sign-Up Navs*/
@@ -42,7 +41,7 @@ HEADER CSS STARTS HERE
 .header{
     text-align: center;
     position: relative;
-    overflow: hidden;
+    
     width: 100%;
     font-size: 25px;
     min-height: 36px;
@@ -66,7 +65,7 @@ HEADER CSS STARTS HERE
     position: absolute;
     width: 150px;
     transform: scaleX(-1);
-    padding-right: 20px;
+    margin-right:10px;
     right: 45px; 
     top: 20px;
 }
@@ -74,31 +73,37 @@ HEADER CSS STARTS HERE
 /* 
 END OF HEADER CSS 
 */
-
+.parent{
+    position: absolute;
+    width: 600px;
+    height:600px;
+    top: 50%;
+    left: 50%;
+    margin-top: -170px;
+    margin-left: -300px;
+    margin-bottom: 10px;
+}
 .form-design{
-    position: relative;
+    width: 600px;
+    height:450px;
+    padding: 40px;
     box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
     background: linear-gradient(#eeefef, #ffffff 10%);
-    overflow: hidden;
-    padding: 80px;
-    border-radius: 5px;
-    width: 350px;
-    left: 35%;
-
+    
+  
 }
 .form-input-group{
     position: relative;
-    
 }
 .label{
     font-size: 20px;
 }
-.form-design input[type=password], .form-design input[type=email] {
+.form-design input[type=password], .form-design input[type=email], .form-design input[type=username], .select{
     font-family: 'Lato', Calibri, Arial, sans-serif;
     font-size: 13px;
     font-weight: 400;
     text-shadow: 0 1px 0 rgba(255,255,255,0.8);
-    margin-bottom: 10px;
+    margin-bottom: 0px;
 
     /* Size and position */
     width: 100%;
@@ -111,9 +116,7 @@ END OF HEADER CSS
         inset 0 3px 2px rgba(0,0,0,0.1);
 }
 
-.form-design input[type=text] {
-    margin-bottom: 10px;
-}
+
 h2{
     text-align: center;
     font-size: 30px;
@@ -121,18 +124,23 @@ h2{
 }
 
 
-button{
+.loginb, .sign-upb{
     position: relative;
-    left: 35%;
+    
+    text-align: center;
     background-color: #04AA6D;
     border: none;
     color: white;
     padding: 16px 32px;
     text-decoration: none;
-    margin: 4px 2px;
     cursor: pointer;
     z-index: 2;
-    
+}
+.sign-upb{
+    left:41%
+}
+.loginb{
+    left:42.5%;
 }
 .dont{
     text-align: center;
