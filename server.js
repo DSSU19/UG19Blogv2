@@ -389,6 +389,7 @@ async function storePasswordInfo(filename, passwordData) {
 }
 
 async function hashPassword(password, email){
+    
     const pepperFileName = process.env.NODE_ENV === "test" ? 'test/info/test_pepper.json': 'info/pepper.json';
     const saltFileName = process.env.NODE_ENV === "test" ? 'test/info/test_salt.json': 'info/salts.json';
     //Create a salt and a pepper
