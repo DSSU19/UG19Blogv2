@@ -6,6 +6,8 @@ const nodemailer = require("nodemailer");
 const fs = require('fs');
 const ejs = require('ejs');
 const crypto = require('crypto');
+const argon2 = require('argon2');
+
 const speakeasy = require('speakeasy');
 const qrCode = require('qrcode');
 const session = require('express-session');
@@ -65,8 +67,7 @@ app.use(session({
 
 app.use((req, res, next) => {
     //console.log(req.sessionID)
-    console.log(req.session.csrfToken || Date.now() > req.session.csrfTokenExpiry)
-
+    //console.log(req.session.csrfToken || Date.now() > req.session.csrfTokenExpiry)
     if(req.url==="/logout"){
         return next()
     }else if (!req.session.csrfToken||  Date.now() > req.session.csrfTokenExpiry){
@@ -81,8 +82,6 @@ app.use((req, res, next) => {
         console.log('Post Data: ' + req.body['csrftokenvalue'], req.session.csrfToken)
         return res.status(403).end();
     }
-
-
     next();
 });
 
@@ -93,16 +92,23 @@ app.use('/addBlogPost', (req,res,next)=>{
         return next()
     }else if (!req.session.doubleSubmitCookie||  Date.now() > req.session.doubleSubmitCookieTokenExpiry){
         req.session.doubleSubmitCookie = crypto.createHmac('sha256', process.env.token_secret_key).update(crypto.randomBytes(32).toString('hex')).digest('hex');
+
+        // Store the CSRF token in a cookie.
+        res.cookie('doubleSubmitCookie', req.session.doubleSubmitCookie,{
+            secure: 'true', //cookie can only be transmitted over https
+            httpOnly: true, //prevents client side script from accessing the cookie
+            sameSite: 'strict',// prevents cookie from being sent in cross site requests
+            signed: true, //signs the cookie to prevent the cookie from being tampered with
+        });
         //const twoMinutesTimer = 120000 //Two minutes for testing
         const fortyFiveMinutesTimer = 1000*60*45
         req.session.doubleSubmitCookieTokenExpiry = Date.now() + fortyFiveMinutesTimer;
     }
-    if (req.method==="POST" && (!req.body['doubleSubmitCookie'] || req.body['doubleSubmitCookie'] !== req.session.doubleSubmitCookie )){
-        console.log('Post Data: ' + req.body['doubleSubmitCookie'], req.session.doubleSubmitCookie)
+    if (req.method==="POST" && (!req.body['doubleSubmitCookie'] || req.body['doubleSubmitCookie'] !== req.signedCookies.doubleSubmitCookie )){
+        console.log('Double Submit Cookie Post ' + req.body['doubleSubmitCookie'], req.session.doubleSubmitCookie)
         return res.status(403).end();
     }
     next();
-
 })
 
 
@@ -252,7 +258,7 @@ server.listen(port, () => {
 
 module.exports = {
     app,signUpValidation, escapeAllInput, userExistsCheck, storePasswordInfo,loginValidation, getPasswordInfo, validateLoginCredentials, searchBarValidation, escapeInput,
-    blogFormDataValidation, validateInputsAll, validateInput,  encryptTotpInfo, getEncryptionKeys, decryptTotpInfo, encryptWord, decryptWord, limiter, outputEncodingForHTMLContext
+    blogFormDataValidation, validateInputsAll, validateInput,  encryptTotpInfo, getEncryptionKeys, decryptTotpInfo, encryptWord, decryptWord, limiter,
 };
 /*All functions used*/
 
@@ -318,17 +324,6 @@ function escapeAllInput(reqBody){
     return reqBody
 }
 
-
-function outputEncodingForHTMLContext(unsafe) {
-    return unsafe
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-}
-
-
 function escapeInput(input) {
     const escapeChars = {
         '<': '&lt;',
@@ -363,7 +358,7 @@ function escapeInput(input) {
                 }
             })
             .catch((err) => {
-                console.log("The error is:" + err)
+                console.log("\The error is:" + err)
             });
     });
 }
@@ -412,7 +407,17 @@ async function hashPassword(password, email){
     if(storeSalt && storePepper){
         //Add the salt and the pepper to the password:
         const saltedAndPepperPassword = password + salt + pepper;
-        const hashedPassword = crypto.createHash('sha256').update(saltedAndPepperPassword).digest('hex');
+        //const hashedPassword = crypto.createHash('sha256').update(saltedAndPepperPassword).digest('hex');
+        const hashedPassword = await argon2.hash(
+            password + pepper, // Combine the password and pepper
+            {
+                type: argon2.argon2id, // Use the Argon2id algorithm
+                salt: Buffer.from(salt, 'hex'), // Convert the salt to a buffer
+                timeCost: 4, // 4 passes
+                hashLength: 32, // 32 byte hash output
+            }
+        );
+        console.log(hashedPassword);
         return hashedPassword
     }else{
         return false
@@ -517,18 +522,30 @@ async function validateLoginCredentials(password, email){
     const passwordInfo = await getPasswordInfo(email)
     //console.log(passwordInfo)
     if(passwordInfo!==false){
-        const saltedAndPepperedPassword = password + passwordInfo.salt + passwordInfo.pepper;
         //console.log(saltedAndPepperedPassword)
-        const hashedPassword = crypto.createHash('sha256').update(saltedAndPepperedPassword).digest('hex');
+        //const hashedPassword = crypto.createHash('sha256').update(saltedAndPepperedPassword).digest('hex');
         //console.log(hashedPassword)
+        const saltedAndPepperedPassword = password + passwordInfo.pepper;
         const userQuery = {
-            text: 'SELECT email, password, authmethod FROM users WHERE email = $1 AND password =$2 AND isverified =$3',
-            values: [email, hashedPassword, true] // 24 hours in milliseconds
+            text: 'SELECT email, password, authmethod FROM users WHERE email = $1  AND isverified =$2',
+            values: [email, true] // 24 hours in milliseconds
         };
         try {
             const result = await readOnlyPool.query(userQuery);
-            console.log(result.rows[0])
-            if(result.rows.length > 0){
+            const passwordComparingResult = await argon2.verify(
+                result.rows[0].password, // The hashed password to verify against
+                saltedAndPepperedPassword, // The salted and peppered password to verify
+                {
+                    type: argon2.argon2id, // Use the Argon2id algorithm
+                    salt: Buffer.from(passwordInfo.salt, 'hex'), // Convert the salt to a buffer
+                    timeCost: 4, // 4 passes (should match the timeCost used for hashing the password)
+                    hashLength: 32, // 32 byte hash output (should match the hashLength used for hashing the password)
+                }
+            );
+            console.log('Password comparing is ' + passwordComparingResult)
+
+            console.log("Password stored is "+ result.rows[0].password)
+            if(passwordComparingResult){
                 return {credentialsValid: true, authMethod: result.rows[0].authmethod};
             }else{
                 return {credentialsValid: false};
@@ -578,7 +595,9 @@ async function TwoFactorEmail(email, token,res, req) {
        // console.log("The input is : " + input)
         if (!regex.test(input) || !input || input.length < 2 ) {
             console.log("The error is in: "+ input)
-            errors.push(errorMessages[inputName]);
+            errors.push(errorMessages[inputName])
+            //errors.push(input)
+           // errors.push(input);
         }
     }
     if (errors.length > 0) {
@@ -588,6 +607,7 @@ async function TwoFactorEmail(email, token,res, req) {
         return { isValid: true };
     }
 }
+
 
 
 function validateInputsAll(reqBody) {
@@ -1335,9 +1355,14 @@ app.post('/addBlogPost', (req, res)=>{
     if(req.session.usermail){
         console.log("invalid token")
         if(!blogFormDataValidation(req.body).isValid) {
-            return res.render("addBlogPost", {errors: 'There is an error in your input', csrfToken:req.session.token, doubleSubmitCookie: req.session.doubleSubmitCookie});
+            //const escapedInputPart2 = encodeURIComponent(req.body)
+            //console.log(escapedInputPart2)
+
+            const errors = blogFormDataValidation(req.body).errors;
+            return res.render("addBlogPost", {errors:  errors , csrfToken:req.session.csrfToken, doubleSubmitCookie: req.session.doubleSubmitCookie});
         }else{
             const escapedReqBody = escapeAllInput(req.body)
+
             const blogTitle = escapedReqBody.blogTitle
             const  blogData  = escapedReqBody.blogData
             const blogDescription = escapedReqBody.blogDescription
