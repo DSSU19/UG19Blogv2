@@ -1,5 +1,4 @@
 body{
-    overflow: hidden;
     margin: 0px;
 }
 
@@ -38,14 +37,20 @@ body{
 /*
 HEADER CSS STARTS HERE
 */
+
+.logo_bar{
+    width: 10%;
+}
 .header{
+    display: flex;
     text-align: center;
-    position: relative;
-    
-    width: 100%;
+    align-items: center;
+    justify-content: space-evenly;
+    /*position: relative;*/
+  /*  width: 100%;*/
     font-size: 25px;
-    min-height: 36px;
-    padding: 30px;
+    /*min-height: 36px;*/
+    /*padding: 30px;*/
     background: #1abc9c;
     margin-bottom: 40px;
     color: white;
