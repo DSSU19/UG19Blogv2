@@ -210,6 +210,20 @@ describe('validateSearchInput', function() {
         assert.strictEqual(result, unencryptedWord)
     });
 
+    it('Output character Encoding', function() {
+        const blogData={
+            blogTitle: '‘ order by username --',
+            blogDescription: "'‘ order by username --'",
+            blogData: "There is an invalid input in your blog dataa",
+        }
+        //should return an object with isValid equal to false and an array of errors when given invalid inputs
+        const result = app.blogFormDataValidation(blogData);
+        assert.strictEqual(result.isValid, false);
+        assert.strictEqual(result.errors.length, 2);
+
+
+    });
+
 
 
 });

@@ -1,5 +1,5 @@
 body{
-    /*overflow: hidden;*/
+    overflow: hidden;
     margin: 0px;
 }
 
@@ -74,18 +74,12 @@ HEADER CSS STARTS HERE
 END OF HEADER CSS 
 */
 .parent{
-    position: absolute;
-    width: 600px;
-    height:600px;
-    top: 50%;
-    left: 50%;
-    margin-top: -150px;
-    margin-left: -300px;
-    margin-bottom: 10px;
+    display: flex;
+    justify-content: center;
+
 }
 .form-design{
-    width: 600px;
-    height:450px;
+    width: 50%;
     padding: 40px;
     box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
     background: linear-gradient(#eeefef, #ffffff 10%);
@@ -130,8 +124,7 @@ h2{
 
 
 .loginb, .sign-upb{
-    position: relative;
-    
+
     text-align: center;
 	background-color: #04AA6D;
 	border: none;
@@ -139,14 +132,14 @@ h2{
     padding: 16px 32px;
     text-decoration: none;
     cursor: pointer;
-	z-index: 2;
+
 }
 
 .sign-upb{
     left:41%
 }
 .loginb{
-    left:42.5%;
+
 
 
 }

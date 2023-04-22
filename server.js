@@ -252,7 +252,7 @@ server.listen(port, () => {
 
 module.exports = {
     app,signUpValidation, escapeAllInput, userExistsCheck, storePasswordInfo,loginValidation, getPasswordInfo, validateLoginCredentials, searchBarValidation, escapeInput,
-    blogFormDataValidation, validateInputsAll, validateInput,  encryptTotpInfo, getEncryptionKeys, decryptTotpInfo, encryptWord, decryptWord, limiter
+    blogFormDataValidation, validateInputsAll, validateInput,  encryptTotpInfo, getEncryptionKeys, decryptTotpInfo, encryptWord, decryptWord, limiter, outputEncodingForHTMLContext
 };
 /*All functions used*/
 
@@ -317,6 +317,17 @@ function escapeAllInput(reqBody){
     //console.log("This is the escaped version" + JSON.stringify(reqBody));
     return reqBody
 }
+
+
+function outputEncodingForHTMLContext(unsafe) {
+    return unsafe
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
 
 function escapeInput(input) {
     const escapeChars = {
@@ -1332,10 +1343,6 @@ app.post('/addBlogPost', (req, res)=>{
             const blogDescription = escapedReqBody.blogDescription
             const timeCreated = Date.now().toString();
             const dateCreated = new Date(parseInt(timeCreated)).toISOString().slice(0, 10);
-            // Get the CRF token value from the request body
-            const userToken = req.body.csrftokenvalue;
-            // Get the CRF token value from the session variable
-            const serverToken = req.session.token;
             const author = req.session.usermail;
             const userIDQuery={
                 text: 'SELECT id FROM users WHERE email = $1',
