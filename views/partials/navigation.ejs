@@ -1,21 +1,23 @@
 <div class="navBar">
     <div class="navBar_with_logo">
+        <img src="/images/speaker.png" class="scream-image-resize">
         <h1>Speak your mind</h1>
-        <img src="/images/scream.png" class="scream-image-resize">
     </div>
-    <div>
-        <a href="addBlogPost">Add a blog Post</a>
-    </div>
-    <form action="/search" method="GET">
-        <input type="text" name="search" placeholder="Search...">
-        <button type="submit">Search</button>
-    </form>
-    <form action="/logout" method="post">
-        <button type="submit">Sign Out</button>
-    </form>
-    <a href="/blogDashboard">
-        <i class="material-icons">home</i>
-    </a>
+        <div>
+            <a href="/addBlogPost">Add a blog Post</a>
+        </div>
+        <form action="/search" method="GET">
+            <input type="text" name="search" placeholder="Search...">
+            <button type="submit">Search</button>
+        </form>
+        <a href="/blogDashboard">
+            <i class="material-icons">home</i>
+        </a>
+        <form action="/logout" method="post">
+            <button type="submit">Sign Out</button>
+        </form>
+
+
 </div>
 
 

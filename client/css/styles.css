@@ -22,11 +22,14 @@ body{
 .navBar{
     display: flex;
     align-items: center;
-    background-color: beige;
+    justify-content: space-evenly;
+    background-color: #1abc9c;
+    color: white;
 }
 
 .navBar_with_logo{
     display: flex;
+    align-items: center;
 }
 
 
