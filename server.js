@@ -32,7 +32,10 @@ const port = 8080;
 
 app.use(express.static('client'));
 //Use the cookie parser for the double submit cookie.
-app.use(cookieParser());
+app.use(cookieParser(process.env.cookie_secret_key));
+//app.use(cookieParser());
+
+
 // Body parser middleware
 app.use(bodyParser.json());
 //Force input to be encoded correctly.
@@ -86,13 +89,13 @@ app.use((req, res, next) => {
 });
 
 
+
 app.use('/addBlogPost', (req,res,next)=>{
     //console.log(req.session.csrfToken || Date.now() > req.session.csrfTokenExpiry)
     if(req.url==="/logout"){
         return next()
     }else if (!req.session.doubleSubmitCookie||  Date.now() > req.session.doubleSubmitCookieTokenExpiry){
         req.session.doubleSubmitCookie = crypto.createHmac('sha256', process.env.token_secret_key).update(crypto.randomBytes(32).toString('hex')).digest('hex');
-
         // Store the CSRF token in a cookie.
         res.cookie('doubleSubmitCookie', req.session.doubleSubmitCookie,{
             secure: 'true', //cookie can only be transmitted over https
