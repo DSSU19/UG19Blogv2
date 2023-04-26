@@ -146,11 +146,7 @@ h2{
 .sign-upb{
     left:41%
 }
-.loginb{
 
-
-
-}
 .dont{
     text-align: center;
 }
@@ -175,17 +171,28 @@ h2{
     padding: 3% 0 3%;
 
 }
-
-.blogs_forms{
-    box-shadow: 0 4px 8px 0 rgba(0,0,0,0.2);
-    display: flex;
-    flex-direction: column;
-    margin: 5%;
-}
-
 .input_group{
-    display: flex;
-    flex-direction: row;
-    padding: 2%;
+    display: relative;
+
+}
+.input_group input[type=text], .blogdata, .bloginfo, .blogdesc{
+    font-family: 'Lato', Calibri, Arial, sans-serif;
+    font-size: 13px;
+    font-weight: 400;
+    text-shadow: 0 1px 0 rgba(255,255,255,0.8);
+    margin-bottom: 0px;
+
+    /* Size and position */
+    width: 100%;
+    padding: 10px;
+
+    /* Styles */
+    border: none; /* Remove the default border */
+    box-shadow: 
+        inset 0 0 5px rgba(0,0,0,0.1),
+        inset 0 3px 2px rgba(0,0,0,0.1);
+}
+.blogdata{
+    text-align: center;
 }
 

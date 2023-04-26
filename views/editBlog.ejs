@@ -7,30 +7,38 @@
 <body>
 
 <%- include('partials/navigation') %>
+<div class = "parent">
+<div class = "form-design">
 <h2>Edit Blog</h2>
-<div>
+
     <form action="/editblog/<%= post.id %>" method="post">
         <div class="form-input-group">
             <input type="hidden" id="csrftokenvalue" name="csrftokenvalue" value="<%=csrfToken%>">
         </div>
-        <label for="blogtitle">Title:</label>
-        <input type="text" id="blogtitle" name="blogtitle" value="<%= post.blogtitle %>">
-
-        <label for="blogdescription">Description:</label>
-        <textarea id="blogdescription" name="blogdescription"><%= post.blogdescription %></textarea>
-
-        <label for="bloginfo">Blog Content:</label>
-        <textarea id="bloginfo" name="bloginfo"><%= post.bloginfo %></textarea>
-
-        <button type="submit">Update</button>
+        <div class = "input_group">
+         <label class = "label" for="blogtitle">Title:</label>
+         <input type="text" id="blogtitle" name="blogtitle" value="<%= post.blogtitle %>">
+        </div>
+        <div class = "input_group">
+         <label class = "label" for="blogdescription">Description:</label>
+         <textarea class = "blogdesc" id="blogdescription" name="blogdescription"><%= post.blogdescription %></textarea>
+        </div>
+        <div class = "input_group">
+         <label class = "label" for="bloginfo">Blog Content:</label>
+         <textarea class ="bloginfo" id="bloginfo" name="bloginfo"><%= post.bloginfo %></textarea>
+        </div>
+        <button class = "sign-upb" type="submit">Update</button>
     </form>
+    <div class = "dont">
+        <a href="/blogDashboard">Back to dashboard</a>
+    </div>
+</div>
 </div>
 <% if (errors) { %>
     <div>
         <p> <b> <%= errors%> </b></p>
     </div>
 <% } %>
-<a href="/blogDashboard">Back to dashboard</a>
 
 </body>
 </html>

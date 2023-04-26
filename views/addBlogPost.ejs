@@ -6,6 +6,9 @@
 </head>
 <body>
 <%- include('partials/navigation') %>
+<div class = "parent">
+<div class = "form-design">
+    <h2> Add a blog</h2>
     <form method="post" action="/addBlogPost" class="blogs_forms">
         <!-- Add the following code to include the CSRF csrfToken as a hidden field -->
         <div class="input_labels">
@@ -13,24 +16,25 @@
             <input type="hidden" id="doubleSubmitCookie" name="doubleSubmitCookie" value="<%=doubleSubmitCookie%>">
         </div>
         <div class="input_group">
-            <label for="blogTitle">Blog Title</label><br>
+            <label class = "label" for="blogTitle">Blog Title</label><br>
             <input type="text" id="blogTitle" name="blogTitle" value="" required><br>
         </div>
         <div class="input_group">
-            <label for="blogDescription">Blog Description</label><br>
+            <label class = "label" for="blogDescription">Blog Description</label><br>
             <input type="text" id="blogDescription" name="blogDescription" value="" required placeholder="Please put brief blog description"><br>
         </div>
         <div class="input_group">
-            <label for="blogData">Blog Data</label><br>
-            <textarea rows="4" cols="50" name="blogData" required>
+            <label class = "label" for="blogData">Blog Data</label><br>
+            <textarea class= "blogdata"rows="4" cols="50" name="blogData" required>
             Enter all your blog Data here</textarea>
             <br><br>
         </div>
         <div class="input_group">
-            <input type="submit" value="Submit">
+            <input class = "sign-upb" type="submit" value="Submit">
         </div>
     </form>
-
+</div>
+</div>
 
 <% if (errors) { %>
     <div>
