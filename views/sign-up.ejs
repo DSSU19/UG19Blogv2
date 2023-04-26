@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <%- include('partials/head') %>
+    <script src="https://www.google.com/recaptcha/api.js"></script>
 </head>
 <body>
 <%- include('partials/homenav') %>
@@ -37,6 +38,10 @@
                 <option class = "label" value="email" title="Authentication via email">Email</option>
                 <option class= "label"value="totp">Authenticator Apps</option>
             </select>
+        </div>
+
+        <div class="form-input-group">
+            <div class="g-recaptcha" data-sitekey="6LcxD74lAAAAACyWamoItGFrF_1vS-ESJ-zWV6NQ"></div>
         </div>
 
         <div class="form-input-group">

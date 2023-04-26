@@ -3,6 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <%- include('partials/head') %>
+    <script src="https://www.google.com/recaptcha/api.js"></script>
+
 
 
 </head>
@@ -26,6 +28,10 @@
         <div class="form-input-group">
             <label class = "label" for="password">Password:</label><br>
             <input type="password" id="password" name="password" value="" required><br><br>
+        </div>
+
+        <div class="form-input-group">
+            <div class="g-recaptcha" data-sitekey="6LcxD74lAAAAACyWamoItGFrF_1vS-ESJ-zWV6NQ"></div>
         </div>
 
         <div class="form-input-group">

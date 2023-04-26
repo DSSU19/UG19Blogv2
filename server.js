@@ -17,6 +17,8 @@ const { v4: uuid } = require('uuid')
 
 const rateLimiter = require('express-rate-limit');
 
+const axios = require('axios');
+
 
 
 
@@ -1405,3 +1407,26 @@ app.post('/addBlogPost', (req, res)=>{
     }
 
 })
+
+
+
+
+/*async function verifyRecaptcha(response, remoteip = null) {
+    const secret = '6LcCNbolAAAAAFcrtZ9IJUS2bAyHaU1UqTOyydIU';
+    const url = 'https://www.google.com/recaptcha/api/siteverify';
+
+    try {
+        const result = await axios.post(url, null, {
+            params: {
+                secret,
+                response,
+                remoteip
+            }
+        });
+
+        return result.data.success;
+    } catch (error) {
+        console.error('Error verifying reCAPTCHA:', error);
+        return false;
+    }
+} */
