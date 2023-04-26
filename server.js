@@ -76,6 +76,7 @@ app.use((req, res, next) => {
     if(req.url==="/logout"){
         return next()
     }else if (!req.session.csrfToken||  Date.now() > req.session.csrfTokenExpiry){
+        console.log("This gets run")
         req.session.csrfToken = crypto.createHmac('sha256', process.env.token_secret_key).update(crypto.randomBytes(32).toString('hex')).digest('hex');
         //console.log(encryptWord(req.session.csrfToken))
         //const thirtyMinutesTimer = 1800000
@@ -84,7 +85,7 @@ app.use((req, res, next) => {
         req.session.csrfTokenExpiry = Date.now() + fortyFiveMinutesTimer;
     }
     if (req.method==="POST" && (!req.body['csrftokenvalue'] || req.body['csrftokenvalue'] !== req.session.csrfToken )){
-        console.log('Post Data: ' + req.body['csrftokenvalue'], req.session.csrfToken)
+        console.log('Post Data: ' + "csrf body value:" +  req.body['csrftokenvalue'] + " SESSION: " + req.session.csrfToken)
         return res.status(403).end();
     }
     next();
@@ -520,6 +521,26 @@ async function getEncryptionKeys(email, filename) {
     }
 }
 
+function recaptchaFunctionVerify(req,res){
+    if(req.body['g-recaptcha-response'] === undefined || req.body['g-recaptcha-response'] === '' || req.body['g-recaptcha-response'] === null)
+    {
+        return res.json({"responseError" : "something goes to wrong"});
+    }
+
+
+    let verificationUrl = "https://www.google.com/recaptcha/api/siteverify?secret=" + process.env.recaptcha_secret_key + "&response=" + req.body['g-recaptcha-response'] + "&remoteip=" + req.connection.remoteAddress;
+    // Hitting GET request to the URL, Google will respond with success or error scenario.
+    request(verificationUrl,function(error,response,body) {
+        body = JSON.parse(body);
+        // Success will be true or false depending upon captcha validation.
+        if(body.success !== undefined && !body.success) {
+            return res.json({"responseCode" : 1,"responseDesc" : "Failed captcha verification"});
+        }
+        res.json({"responseCode" : 0,"responseDesc" : "Sucess"});
+    });
+
+}
+
 
 
 //function to validate login credentials
@@ -562,6 +583,24 @@ async function validateLoginCredentials(password, email){
 
     }else{
         return {credentialsValid: false};
+    }
+}
+
+async function verifyRecaptcha(response, remoteip = null) {
+    const secret = process.env.recaptcha_secret_key;
+    const url = 'https://www.google.com/recaptcha/api/siteverify';
+    try {
+        const result = await axios.post(url, null, {
+            params: {
+                secret,
+                response,
+                remoteip
+            }
+        });
+        return result.data.success;
+    } catch (error) {
+        console.error('Error verifying reCAPTCHA:', error);
+        return false;
     }
 }
 
@@ -991,51 +1030,67 @@ app.get('*', (req,res)=>{
 
 
 /*All the application post routes*/
-app.post('/sign-up',  (req,res)=>{
-        if(signUpValidation(req.body).isValid){
-            console.log('gets here')
-            const escapedReqBody = escapeAllInput(req.body)
-            const email = escapedReqBody.email;
-            const password = escapedReqBody.password;
-            const username = escapedReqBody.username;
-            const authMethod = escapedReqBody.authmethod;
-            //Check if the user already exists in the system:
-            userExistsCheck(email).then(async (userExists) => {
-                if (userExists) {
-                    //console.log(res.toString())
-                    //Redirect the user to the email verification page in order to prevent account enumeration, but no actual email will be sent to that user
-                    //since the user already exists in the system.
-                    res.render('email-verification', {email:email, errors:false, csrfToken: req.session.csrfToken})
-                } else {
-                    //If user does not already exists in the password then we can hash the password
-                    //Call the hashedPassword which is a function that generated a random hash.
-                    const hashedPassword =  await hashPassword(password, email)
-                    console.log(hashedPassword)
-                    if(hashedPassword){
-                        //Process with hashed Password has gone well without any errors and thus process can continue.
-                        // Generate a unique verification token for email verification
-                       const token = crypto.randomBytes(20).toString('hex');
-                       const creationTime = Date.now();
-                       // Insert the new user into the "users" table
-                       const query = {
-                           text: 'INSERT INTO users (email, password, isverified, verificationtoken, firstname, creationtime, authmethod) VALUES ($1, $2, $3, $4, $5, $6, $7)',
-                           values: [email, hashedPassword, false, token, username, creationTime,authMethod ]
-                       };
-                       pool.query(query)
-                           .then(() => sendVerificationEmail(email, token,res, req))
-                           .catch(err=>console.error(err))
-                    }else{
-                        console.log("Password unsuccessfully hashed");
-                        const errors = [];
-                        errors.push("There was an error during the sign-up process, please try again later");
-                        res.render('sign-up', {errors: errors , message: false, csrfToken: req.session.csrfToken})
+app.post('/sign-up',  async (req,res)=>{
+        const captchaResponse = req.body['g-recaptcha-response'];
+        const captchaSuccess = await verifyRecaptcha(captchaResponse, req.ip);
+        if(captchaSuccess) {
+            if (signUpValidation(req.body).isValid) {
+                console.log('gets here')
+                const escapedReqBody = escapeAllInput(req.body)
+                const email = escapedReqBody.email;
+                const password = escapedReqBody.password;
+                const username = escapedReqBody.username;
+                const authMethod = escapedReqBody.authmethod;
+                //Check if the user already exists in the system:
+                userExistsCheck(email).then(async (userExists) => {
+                    if (userExists) {
+                        //console.log(res.toString())
+                        //Redirect the user to the email verification page in order to prevent account enumeration, but no actual email will be sent to that user
+                        //since the user already exists in the system.
+                        res.render('email-verification', {
+                            email: email,
+                            errors: false,
+                            csrfToken: req.session.csrfToken
+                        })
+                    } else {
+                        //If user does not already exists in the password then we can hash the password
+                        //Call the hashedPassword which is a function that generated a random hash.
+                        const hashedPassword = await hashPassword(password, email)
+                        console.log(hashedPassword)
+                        if (hashedPassword) {
+                            //Process with hashed Password has gone well without any errors and thus process can continue.
+                            // Generate a unique verification token for email verification
+                            const token = crypto.randomBytes(20).toString('hex');
+                            const creationTime = Date.now();
+                            // Insert the new user into the "users" table
+                            const query = {
+                                text: 'INSERT INTO users (email, password, isverified, verificationtoken, firstname, creationtime, authmethod) VALUES ($1, $2, $3, $4, $5, $6, $7)',
+                                values: [email, hashedPassword, false, token, username, creationTime, authMethod]
+                            };
+                            pool.query(query)
+                                .then(() => sendVerificationEmail(email, token, res, req))
+                                .catch(err => console.error(err))
+                        } else {
+                            console.log("Password unsuccessfully hashed");
+                            const errors = [];
+                            errors.push("There was an error during the sign-up process, please try again later");
+                            res.render('sign-up', {errors: errors, message: false, csrfToken: req.session.csrfToken})
+                        }
                     }
-                }
                 });
+            } else {
+                console.log('Invalid data or csrf token')
+                const errors = signUpValidation(req.body).errors;
+                res.render('sign-up', {errors: errors, message: false, csrfToken: req.session.csrfToken})
+            }
         }else{
-            console.log('Invalid data or csrf token')
-            const errors = signUpValidation(req.body).errors;
-            res.render('sign-up', {errors: errors, message: false, csrfToken: req.session.csrfToken})
+            res.render('sign-up',
+                {
+                    errors: false,
+                    message: "Please confirm that you are not a robot",
+                    csrfToken:
+                    req.session.csrfToken
+                })
         }
 })
 
@@ -1093,54 +1148,75 @@ app.post('/email-verification',  (req, res) => {
 })
 
 app.post('/login', async (req, res)=>{
-    if(loginValidation(req.body)){
-        const escapedLoginBody= escapeAllInput(req.body);
-        const email = escapedLoginBody.email;
-        const password = escapedLoginBody.password;
-        const userValid = await validateLoginCredentials(password, email);
-        if(userValid.credentialsValid){
-            const authenticationType = userValid.authMethod;
-            if(authenticationType==="email"){
-                //const token=   Math.floor(100000 + Math.random() * 900000);
-                // Generate a unique verification token for email Two factor Authentication.
-                const token = crypto.randomBytes(20).toString('hex');
-                let creationTime = Date.now();
-                const selectQuery = {
-                    text: 'SELECT otp, used FROM otps WHERE email = $1',
-                    values: [email] // 24 hours in milliseconds
-                };
-                pool.query(selectQuery)
-                    .then((result)=>{
-                        if(result.rows.length > 0){
-                            const updateQuery = {
-                                text: 'UPDATE otps SET used = $1, otp = $2, creationtime= $3 WHERE email = $4',
-                                values: [false, token, creationTime, email]
-                            };
-                            pool.query(updateQuery);
-                        }else{
-                            //This means that there has been no otp set before
-                            const query = {
-                                text: 'INSERT INTO otps (email, otp, used, creationtime) VALUES ($1, $2, $3, $4)',
-                                values: [email, token, false, creationTime]
-                            };
-                            pool.query(query)
-                        }
-                    })
-                //Two factor Authentication.
-                await TwoFactorEmail(email, token, res, req)
-            }else if(authenticationType==="totp"){
-                req.session.totpLoginUserMail= email;
-                res.redirect('/verify-totp')
-            }
+    const captchaResponse = req.body['g-recaptcha-response'];
+    const captchaSuccess = await verifyRecaptcha(captchaResponse, req.ip);
+    //console.log("Captcha success: " + captchaSuccess)
+    if(captchaSuccess) {
+        if (loginValidation(req.body)) {
+            const escapedLoginBody = escapeAllInput(req.body);
+            const email = escapedLoginBody.email;
+            const password = escapedLoginBody.password;
+            const userValid = await validateLoginCredentials(password, email);
+            if (userValid.credentialsValid) {
+                const authenticationType = userValid.authMethod;
+                if (authenticationType === "email") {
+                    //const token=   Math.floor(100000 + Math.random() * 900000);
+                    // Generate a unique verification token for email Two factor Authentication.
+                    const token = crypto.randomBytes(20).toString('hex');
+                    let creationTime = Date.now();
+                    const selectQuery = {
+                        text: 'SELECT otp, used FROM otps WHERE email = $1',
+                        values: [email] // 24 hours in milliseconds
+                    };
+                    pool.query(selectQuery)
+                        .then((result) => {
+                            if (result.rows.length > 0) {
+                                const updateQuery = {
+                                    text: 'UPDATE otps SET used = $1, otp = $2, creationtime= $3 WHERE email = $4',
+                                    values: [false, token, creationTime, email]
+                                };
+                                pool.query(updateQuery);
+                            } else {
+                                //This means that there has been no otp set before
+                                const query = {
+                                    text: 'INSERT INTO otps (email, otp, used, creationtime) VALUES ($1, $2, $3, $4)',
+                                    values: [email, token, false, creationTime]
+                                };
+                                pool.query(query)
+                            }
+                        })
+                    //Two factor Authentication.
+                    await TwoFactorEmail(email, token, res, req)
+                } else if (authenticationType === "totp") {
+                    req.session.totpLoginUserMail = email;
+                    res.redirect('/verify-totp')
+                }
 
-        }else{
-            console.log('Invalid credentials')
-            res.render('index', {errors: "Username and/or password is incorrect", message: false, qrCodeData: false,csrfToken: req.session.csrfToken })
+            } else {
+                console.log('Invalid credentials')
+                res.render('index', {
+                    errors: "Username and/or password is incorrect",
+                    message: false,
+                    qrCodeData: false,
+                    csrfToken: req.session.csrfToken
+                })
+            }
+            //console.log(email,password)
+        } else {
+            console.log('Invalid user data')
+            res.render('index', {
+                errors: "Username and/or password is incorrect",
+                message: false,
+                csrfToken: req.session.csrfToken
+            })
         }
-        //console.log(email,password)
     }else{
-        console.log('Invalid user data')
-        res.render('index', {errors: "Username and/or password is incorrect", message: false, csrfToken: req.session.csrfToken})
+        res.render('index', {
+            errors: "Please confirm that you are not a robot",
+            message: false,
+            csrfToken: req.session.csrfToken
+        })
+
     }
 
 })
@@ -1409,24 +1485,3 @@ app.post('/addBlogPost', (req, res)=>{
 })
 
 
-
-
-/*async function verifyRecaptcha(response, remoteip = null) {
-    const secret = '6LcCNbolAAAAAFcrtZ9IJUS2bAyHaU1UqTOyydIU';
-    const url = 'https://www.google.com/recaptcha/api/siteverify';
-
-    try {
-        const result = await axios.post(url, null, {
-            params: {
-                secret,
-                response,
-                remoteip
-            }
-        });
-
-        return result.data.success;
-    } catch (error) {
-        console.error('Error verifying reCAPTCHA:', error);
-        return false;
-    }
-} */
