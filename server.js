@@ -1087,7 +1087,7 @@ app.post('/sign-up',  async (req,res)=>{
             res.render('sign-up',
                 {
                     errors: false,
-                    message: "Please confirm that you are not a robot",
+                    message: "Please tick the reCAPTCHA checkbox to prove that you are human and not a robot.",
                     csrfToken:
                     req.session.csrfToken
                 })
@@ -1212,8 +1212,8 @@ app.post('/login', async (req, res)=>{
         }
     }else{
         res.render('index', {
-            errors: "Please confirm that you are not a robot",
-            message: false,
+            errors: false,
+            message: "Please tick the reCAPTCHA checkbox to prove that you are human and not a robot.",
             csrfToken: req.session.csrfToken
         })
 

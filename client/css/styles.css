@@ -175,8 +175,14 @@ h2{
     padding: 3% 0 3%;
 
 }
+
+.message{
+    padding: 2% 0;
+}
+
+
 .input_group{
-    display: relative;
+
 
 }
 .input_group input[type=text], .blogdata, .bloginfo, .blogdesc{

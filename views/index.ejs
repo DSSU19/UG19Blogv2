@@ -33,7 +33,16 @@
         <div class="form-input-group">
             <div class="g-recaptcha" data-sitekey="6LcxD74lAAAAACyWamoItGFrF_1vS-ESJ-zWV6NQ"></div>
         </div>
-
+        <% if (message) { %>
+            <div class="message">
+                <p><b>Message:</b>  <%= message%></p>
+            </div>
+        <% } %>
+        <% if (errors) { %>
+            <div class="message error">
+                <b><%= errors%> </b>
+            </div>
+        <% } %>
         <div class="form-input-group">
             <button class ="loginb" type="submit">Login</button>
         </div>
@@ -43,16 +52,7 @@
             </p>
         </div>
 
-        <% if (message) { %>
-            <div>
-                <p><b>Message:</b>  <%= message%></p>
-            </div>
-        <% } %>
-        <% if (errors) { %>
-            <div>
-               <b><%= errors%> </b>
-            </div>
-        <% } %>
+
     </form>
 </div>
 </div>
