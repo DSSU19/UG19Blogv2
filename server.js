@@ -1562,6 +1562,7 @@ app.post('/passwordReset', async(req,res)=>{
                     }
                 }else if(queryResults==='totp'){
                     res.render('otpPasswordReset', {
+                        email:email,
                         errors: false,
                         csrfToken: req.session.csrfToken
                     })
@@ -1652,7 +1653,60 @@ app.post('/changePassword', async(req,res)=>{
 })
 
 
+app.post('/verifypasswordtotp', async(req,res)=>{
+    const totpToken = req.body.token
+    const userEmail = req.body.email
+    const inputRegex= /^[a-z0-9]+$/i;
+    const emailRegex = /^([a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9\-\.]+)\.([a-zA-Z]{2,63})$/;
+    if(inputRegex.test(totpToken) && emailRegex.test(userEmail)){
+        const selectSecret = {
+            text: 'SELECT secret FROM totp WHERE email = $1',
+            values: [userEmail] // 24 hours in milliseconds
+        };
+        let results = await pool.query(selectSecret);
+        results = results.rows[0].secret
+        //console.log(results)
+        const decrypted_secret = await decryptTotpInfo(results, userEmail)
+        if(decrypted_secret){
+            const verified = speakeasy.totp.verify(
+                { secret: decrypted_secret,
+                    encoding: 'base32',
+                    token: totpToken,
+                    window: 1
+                });
+            if(verified){
+                res.render('changePassword', {
+                    authorized: true,
+                    csrfToken: req.session.csrfToken,
+                    email: userEmail,
+                    message: false,
+                    errors: false,
+                })
+            }else{
+                res.render('otpPassworReset', {
+                    csrfToken: req.session.csrfToken,
+                    email: userEmail,
+                    errors: "Your token is invalid",
+                })
 
+            }
+
+
+        }
+        //console.log(decrypted_secret)
+
+
+
+    }else{
+        res.render('otpPasswordReset', {
+            email: userEmail,
+            message: false,
+            errors: 'Invalid data. Please check your user input',
+            csrfToken: req.session.csrfToken
+        })
+
+    }
+})
 
 
 
@@ -1673,6 +1727,7 @@ app.post('/verifyPasswordReset', async(req, res)=>{
         console.log(queryResults)
         if(verificationToken===queryResults){
             res.render('changePassword', {
+                csrfToken: req.session.csrfToken,
                 email: email,
                 message: false,
                 errors: false,
