@@ -16,12 +16,7 @@ const { v4: uuid } = require('uuid')
 //import rateLimiter from 'express-rate-limit'
 
 const rateLimiter = require('express-rate-limit');
-
 const axios = require('axios');
-
-
-
-
 const app = express();
 
 // Middleware and server set up
@@ -29,7 +24,34 @@ app.use(bodyParser.urlencoded({ extended: false }));
 app.set('view engine', 'ejs');
 app.set('views', 'views');
 const port = 8080;
+//Pg client information to enable queries from the database blog.
+const { Pool } = require('pg');
+//Switches the database name based on whether we are testing or using the actual application
+const databaseName = process.env.NODE_ENV === "test" ? process.env.testDatabase : process.env.database;
 
+const pool = new Pool({
+    host: process.env.localhost,
+    port: process.env.port,
+    user: process.env.user,
+    database: databaseName,
+    password:  process.env.password,
+});
+
+const readOnlyPool = new Pool({
+    host: process.env.localhost,
+    port: process.env.port,
+    user: process.env.readOnlyUser,
+    database: databaseName,
+    password:  process.env.readOnlyUserPassword,
+});
+
+const writeOnlyPool = new Pool({
+    host: process.env.localhost,
+    port: process.env.port,
+    user: process.env.writeOnlyUser,
+    database: databaseName,
+    password:  process.env.writeOnlyUserPassword,
+});
 
 
 app.use(express.static('client'));
@@ -42,8 +64,6 @@ app.use(cookieParser(process.env.cookie_secret_key));
 app.use(bodyParser.json());
 //Force input to be encoded correctly.
 app.use(bodyParser.urlencoded({ extended: true }));
-
-
 app.use(session({
     secret: process.env.secret_key,
     /*
@@ -71,8 +91,13 @@ app.use(session({
 }));
 
 app.use((req, res, next) => {
-    //console.log(req.sessionID)
+    //console.log(req.session.csrfToken)
     //console.log(req.session.csrfToken || Date.now() > req.session.csrfTokenExpiry)
+    if(process.env.NODE_ENV==="test"){
+        const tenMinutesTimer = 1000*60*10
+        req.session.csrfToken = process.env.test_csrf_token;
+        req.session.csrfTokenExpiry = Date.now() + tenMinutesTimer;
+    }
     if(req.url==="/logout"){
         return next()
     }else if (!req.session.csrfToken||  Date.now() > req.session.csrfTokenExpiry){
@@ -159,6 +184,12 @@ app.use('/login', (req,res,next)=>{
     next()
 })
 
+/*app.use((req,res, next)=>{
+    if(req.session.passwordResetTimeCreationDate){
+
+    }
+})*/
+
 
 
 //This is to prevent a DDOS Attack
@@ -208,34 +239,29 @@ app.use((req,res, next)=>{
     next()
 })
 
-//Pg client information to enable queries from the database blog.
-const { Pool } = require('pg');
-//Switches the database name based on whether we are testing or using the actual application
-const databaseName = process.env.NODE_ENV === "test" ? process.env.testDatabase : process.env.database;
+/*app.use(async(req,res,next)=>{
+    let tokenSessionTime= req.session.passwordResetTimeCreationDate
+    if(tokenSessionTime){
+        let currentTime = Date.now()
+        const fiveMinuteTimer = 1000*60*5
+        if(currentTime > tokenSessionTime + fiveMinuteTimer){
+            // This query resets
+            const resetPassword={
+                text: 'UPDATE users SET passwordReset = $1 WHERE email = $2 ',
+                values: [null, req.session.resetEmail]
+            }
+            let deletePasswordToken = await writeOnlyPool.query(resetPassword)
+            if(deletePasswordToken){
+                console.log('delete the password reset token')
+                delete req.session.resetEmail;
+            }
+        }
 
-const pool = new Pool({
-    host: process.env.localhost,
-    port: process.env.port,
-    user: process.env.user,
-    database: databaseName,
-    password:  process.env.password,
-});
+    }
+    next()
+})*/
 
-const readOnlyPool = new Pool({
-    host: process.env.localhost,
-    port: process.env.port,
-    user: process.env.readOnlyUser,
-    database: databaseName,
-    password:  process.env.readOnlyUserPassword,
-});
 
-const writeOnlyPool = new Pool({
-    host: process.env.localhost,
-    port: process.env.port,
-    user: process.env.writeOnlyUser,
-    database: databaseName,
-    password:  process.env.writeOnlyUserPassword,
-});
 
 //Transporter for sending emails:
 // create reusable transporter object using the default SMTP transport
@@ -244,7 +270,7 @@ let transporter = nodemailer.createTransport({
     port: process.env.email_port,
     secure: process.env.email_secure, // true for 465, false for other ports
     auth: {
-        user: process.env.email_user, // generated ethereal user
+        user: process.env.email_user, // generated ethereal user. In production environment, this will be outsourced to a different server.
         pass: process.env.email_pass, // generated ethereal password
     },
 });
@@ -264,7 +290,7 @@ server.listen(port, () => {
 
 module.exports = {
     app,signUpValidation, escapeAllInput, userExistsCheck, storePasswordInfo,loginValidation, getPasswordInfo, validateLoginCredentials, searchBarValidation, escapeInput,
-    blogFormDataValidation, validateInputsAll, validateInput,  encryptTotpInfo, getEncryptionKeys, decryptTotpInfo, encryptWord, decryptWord, limiter,
+    blogFormDataValidation, validateInputsAll, validateInput,  encryptTotpInfo, getEncryptionKeys, decryptTotpInfo, encryptWord, decryptWord, limiter, updatePasswordInfo, reHashNewPassword
 };
 /*All functions used*/
 
@@ -310,7 +336,6 @@ function signUpValidation(reqBody){
         return { isValid: true };
     }
 }
-
 
 //Function to prevent XSS attacks
 function escapeAllInput(reqBody){
@@ -399,9 +424,71 @@ async function storePasswordInfo(filename, passwordData) {
         }
     }
 }
+async function updatePasswordInfo(passwordData){
+    //console.log('it gets here')
+    const pepperFileName = process.env.NODE_ENV === "test" ? './test/info/test_pepper.json': './info/pepper.json';
+    const saltFileName = process.env.NODE_ENV === "test" ? './test/info/test_salt.json': './info/salts.json';
+    try{
+        const saltFile = await fs.readFileSync(saltFileName);
+        const saltObj = JSON.parse(saltFile);
+        const saltUserValue = saltObj.user_info.find(user => user.email === passwordData.email);
+        const pepperFile = await fs.readFileSync(pepperFileName);
+        const pepperObj = JSON.parse(pepperFile);
+        const pepperUserValue = pepperObj.user_info.find(user => user.email === passwordData.email);
+        if (!saltUserValue || !pepperUserValue) {
+            return false;
+        }else{
+            // update the salt value for the user
+            //console.log('Json object value: ' +JSON.stringify(saltUserValue))
+            //console.log('SALT AND PEPPER: ' + passwordData.salt, passwordData.pepper)
+            saltUserValue.salt = passwordData.salt
+            pepperUserValue.pepper = passwordData.pepper
+            //console.log("New salt: " + JSON.stringify(saltObj))
+            //console.log("New Pepper: " + JSON.stringify(pepperObj))
+            // write the updated data back to the JSON file
+             fs.writeFile(saltFileName, JSON.stringify(saltObj, null, 4), (err) => {
+                if (err) throw err;
+                //console.log(`Salt updated for user with email ${passwordData.email}`);
+            });
+            fs.writeFile(pepperFileName, JSON.stringify(pepperObj, null, 4), (err) => {
+                //console.log(`Salt updated for user with email ${passwordData.email}`);
+                if (err) return false;
+            });
+            return true
+        }
+    }catch(err){
+        console.log(err)
+
+    }
+}
+
+async function reHashNewPassword(passwordData){
+    let updateSaltAndPepper = await updatePasswordInfo(passwordData)
+    let {newPassword, salt, pepper} = passwordData
+    console.log(newPassword)
+    if(updateSaltAndPepper){
+        const hashedPassword = await argon2.hash(
+            newPassword + pepper, // Combine the new password and pepper
+            {
+                type: argon2.argon2id, // Uses the Argon2id algorithm as reccommended by the OWASP cheat sheet website
+                salt: Buffer.from(salt, 'hex'), // This converts the salt to a buffer
+                timeCost: 4, // 4 passe//  ()
+                hashLength: 32,
+            }
+        );
+        console.log(hashedPassword)
+        return hashedPassword
+    }else{
+        return false;
+    }
+
+
+
+
+}
+
 
 async function hashPassword(password, email){
-    
     const pepperFileName = process.env.NODE_ENV === "test" ? 'test/info/test_pepper.json': 'info/pepper.json';
     const saltFileName = process.env.NODE_ENV === "test" ? 'test/info/test_salt.json': 'info/salts.json';
     //Create a salt and a pepper
@@ -412,18 +499,18 @@ async function hashPassword(password, email){
     const storePepper =  await storePasswordInfo(pepperFileName,{email:email, pepper:pepper})
     if(storeSalt && storePepper){
         //Add the salt and the pepper to the password:
-        const saltedAndPepperPassword = password + salt + pepper;
+        //const saltedAndPepperPassword = password + salt + pepper;
         //const hashedPassword = crypto.createHash('sha256').update(saltedAndPepperPassword).digest('hex');
         const hashedPassword = await argon2.hash(
             password + pepper, // Combine the password and pepper
             {
-                type: argon2.argon2id, // Use the Argon2id algorithm
-                salt: Buffer.from(salt, 'hex'), // Convert the salt to a buffer
-                timeCost: 4, // 4 passes
-                hashLength: 32, // 32 byte hash output
+                type: argon2.argon2id, // Uses the Argon2id algorithm as reccommended by the OWASP cheat sheet website
+                salt: Buffer.from(salt, 'hex'), // This converts the salt to a buffer
+                timeCost: 4, // 4 passes ()
+                hashLength: 32, // 32 byte hash output()
             }
         );
-        console.log(hashedPassword);
+        //console.log(hashedPassword);
         return hashedPassword
     }else{
         return false
@@ -477,6 +564,35 @@ function loginValidation(reqBody){
     return isValid;
 }
 
+/*function verificationValidation(reqBody){
+    const errorMessages = {
+        verificationemail: "Please type valild email address format",
+        passwordverificationtoken: "Invalid token input",
+    };
+    const errors = [];
+    const emailRegex = /^([a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9\-\.]+)\.([a-zA-Z]{2,63})$/;
+    const usernameRegex= /^[a-z0-9]+$/i;
+    for (const inputName in reqBody) {
+        const input = reqBody[inputName];
+        if(
+            (!input)
+            || (input.length < 1)
+            || (inputName === "verificationemail" && !emailRegex.test(input))
+            || (inputName === "passwordverificationtoken" && !usernameRegex.test(input))
+            || ((inputName === "csrftokenvalue") && !usernameRegex.test(input))
+        ){
+            errors.push(errorMessages[inputName]);
+            //console.log(errorMessages[inputName]);
+        }
+    }
+    if (errors.length > 0) {
+        console.log('Error')
+        return { isValid: false, errors };
+    } else {
+        return { isValid: true };
+    }
+}*/
+
 
 //
 async function getPasswordInfo(email) {
@@ -503,6 +619,9 @@ async function getPasswordInfo(email) {
     }
 }
 
+
+
+
 async function getEncryptionKeys(email, filename) {
     try {
         const fileData = await fs.promises.readFile(filename, 'utf8');
@@ -521,25 +640,6 @@ async function getEncryptionKeys(email, filename) {
     }
 }
 
-function recaptchaFunctionVerify(req,res){
-    if(req.body['g-recaptcha-response'] === undefined || req.body['g-recaptcha-response'] === '' || req.body['g-recaptcha-response'] === null)
-    {
-        return res.json({"responseError" : "something goes to wrong"});
-    }
-
-
-    let verificationUrl = "https://www.google.com/recaptcha/api/siteverify?secret=" + process.env.recaptcha_secret_key + "&response=" + req.body['g-recaptcha-response'] + "&remoteip=" + req.connection.remoteAddress;
-    // Hitting GET request to the URL, Google will respond with success or error scenario.
-    request(verificationUrl,function(error,response,body) {
-        body = JSON.parse(body);
-        // Success will be true or false depending upon captcha validation.
-        if(body.success !== undefined && !body.success) {
-            return res.json({"responseCode" : 1,"responseDesc" : "Failed captcha verification"});
-        }
-        res.json({"responseCode" : 0,"responseDesc" : "Sucess"});
-    });
-
-}
 
 
 
@@ -599,7 +699,7 @@ async function verifyRecaptcha(response, remoteip = null) {
         });
         return result.data.success;
     } catch (error) {
-        console.error('Error verifying reCAPTCHA:', error);
+        console.error('There was an error verifying recaptcha', error);
         return false;
     }
 }
@@ -618,6 +718,51 @@ async function TwoFactorEmail(email, token,res, req) {
     //console.log("Preview URL: %s", nodemailer.getTestMessageUrl(message));
 
     return res.render("verifyToken", { message: email, errors: false, email: email, csrfToken: req.session.csrfToken});
+}
+
+
+async function resetPasswordEmail(email, token, res, req) {
+    // send mail with defined transport object
+    // Construct the email message
+    const message = await transporter.sendMail({
+        from: 'webabenablogtest@gmail.com',
+        to: email,
+        subject: 'Password reset email',
+        text: `This token: ${token} has been sent to confirm that`,
+        html: ` <p style="font-size: 18px;">You have requested a password reset. If this was you, paste this token: <b>${token} </b> in the Password reset verification page you were redirected to.</p>`
+    });
+    if(message){
+        return true
+    }else{
+        return false
+
+    }
+    //console.log("Message sent: %s", message.messageId);
+    //console.log("Preview URL: %s", nodemailer.getTestMessageUrl(message));
+
+}
+
+async function sendPasswordRestMailLink(email, token,creationTime) {
+    // Construct the verification link
+    const passwordResetLink = `https://localhost:8080/changePassword?email=${encodeURIComponent(email)}&token=${encodeURIComponent(token)}&creationTime=${encodeURIComponent(creationTime)}`;
+    // send mail with defined transport object
+    // Construct the email message
+    const message = await transporter.sendMail({
+        from: 'webabenablogtest@gmail.com',
+        to: email,
+        subject: 'Password Reset',
+        text: `Please click the following link to reset your password: ${passwordResetLink}`,
+        html: ` <p style="font-size: 18px;">Please click <a href="${passwordResetLink}">here</a> to reset your password</p>`
+    });
+    //console.log("Message sent: %s", message.messageId);
+    // Preview only available when sending through an Ethereal account
+   // console.log("Preview URL: %s", nodemailer.getTestMessageUrl(message));
+    if(message){
+        return true
+    }else{
+        return false
+
+    }
 }
 
 
@@ -883,6 +1028,26 @@ app.get('/verify-totp', (req, res)=>{
 
 })
 
+app.get('/resetPassword', (req, res)=>{
+    res.render('resetpassword', {errors: false, csrfToken: req.session.csrfToken, message: false})
+})
+
+app.get('/changePassword', (req, res)=>{
+    // Extract the email and token from the URL query string
+    const email = req.query.email;
+    const token = req.query.token;
+    const thirtyMinuteTimer = 1000*60*30;
+    const expirationTime = req.query.creationTime + thirtyMinuteTimer
+    const currentTime = Date.now()
+    if(req.signedCookies.passwordResetCookie===token && currentTime < expirationTime ){
+        res.render('changePassword', {authorized: true, email: email, errors: false, csrfToken: req.session.csrfToken, message: false})
+    }else{
+        res.render('changePassword', {authorized: false, errors: false, csrfToken: null, message: false, email: null})
+
+    }
+})
+
+
 
 /*Blog gets*/
 app.get('/blogDashboard', (req, res)=>{
@@ -992,7 +1157,6 @@ app.get('/search', (req, res) => {
         if(searchBarValidation(query)){
             console.log(query)
             // Use a prepared statement to avoid SQL injection attacks
-
             const likeQuery = {
                 name: 'search-posts',
                 text: 'SELECT * FROM blogdata WHERE blogtitle ILIKE $1 OR bloginfo ILIKE $1 OR blogauthor ILIKE $1 OR blogdescription ILIKE $1',
@@ -1033,7 +1197,7 @@ app.get('*', (req,res)=>{
 app.post('/sign-up',  async (req,res)=>{
         const captchaResponse = req.body['g-recaptcha-response'];
         const captchaSuccess = await verifyRecaptcha(captchaResponse, req.ip);
-        if(captchaSuccess) {
+        if(captchaSuccess || process.env.TEST_TYPE==='signUp') {
             if (signUpValidation(req.body).isValid) {
                 console.log('gets here')
                 const escapedReqBody = escapeAllInput(req.body)
@@ -1342,6 +1506,9 @@ app.post('/twofa', (req,res)=>{
            })
 })
 
+
+
+
 app.post('/logout', (req, res)=> {
     req.session.destroy((err) => {
         if (err) {
@@ -1354,6 +1521,184 @@ app.post('/logout', (req, res)=> {
     });
 })
 
+app.post('/passwordReset', async(req,res)=>{
+    const captchaResponse = req.body['g-recaptcha-response'];
+    const captchaSuccess = await verifyRecaptcha(captchaResponse, req.ip);
+    const emailRegex = /^([a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9\-\.]+)\.([a-zA-Z]{2,63})$/;
+    const email = req.body.email
+    if(captchaSuccess){
+        if(emailRegex.test(email)){
+            let userExists =await  userExistsCheck(email);
+            if(userExists){
+                const authenticationType ={
+                    text: 'SELECT authmethod FROM users WHERE  email = $1 ',
+                    values: [email],  // 24 hours in milliseconds
+
+                }
+                let authenticationQuery = await writeOnlyPool.query(authenticationType)
+                let queryResults = authenticationQuery.rows[0].authmethod
+                let creationTime = Date.now()
+                console.log(queryResults)
+                if(queryResults==='email'){
+                    const passwordResetToken = crypto.randomBytes(20).toString('hex');
+                    let sendVerificationLink =  await sendPasswordRestMailLink(email, passwordResetToken, creationTime)
+                    if(sendVerificationLink){
+                        res.cookie('passwordResetCookie', passwordResetToken, {
+                            maxAge: 30 * 60 * 1000, //30 minutes the the cookie will be expired
+                            httpOnly: true, // cookie cannot be accessed from JavaScript code
+                            secure: true, // cookie can only be sent over HTTPS
+                            sameSite: 'lax', // cookie can only be sent on same-site requests
+                            signed: true,
+                        });
+
+                        res.render('passwordresetverification', {
+                            email: email,
+                            message: false,
+                            errors: false,
+                            csrfToken: req.session.csrfToken
+                        })
+
+
+                    }
+                }else if(queryResults==='totp'){
+                    res.render('otpPasswordReset', {
+                        errors: false,
+                        csrfToken: req.session.csrfToken
+                    })
+                }
+
+
+            }
+        }else{
+            res.render('resetpassword', {
+                message: false,
+                errors: 'Please input a correct email address format',
+                csrfToken: req.session.csrfToken
+            })
+        }
+    }else{
+        res.render('resetpassword', {
+            message: false,
+            errors: 'Please tick the reCAPTCHA checkbox to prove that you are human and not a robot.',
+            csrfToken: req.session.csrfToken
+        })
+    }
+})
+
+app.post('/changePassword', async(req,res)=>{
+    const captchaResponse = req.body['g-recaptcha-response'];
+    const captchaSuccess = await verifyRecaptcha(captchaResponse, req.ip);
+    const passwordRegex = /(?=.{8,}$)(?=.*[a-zA-Z0-9]).*/
+    const emailRegex = /^([a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9\-\.]+)\.([a-zA-Z]{2,63})$/;
+    const email = req.body.email;
+    const password = req.body.newpassword
+    if(captchaSuccess){
+        //console.log(email, password)
+        if(emailRegex.test(email) && passwordRegex.test(password)){
+            const salt =  crypto.randomBytes(16).toString('hex');
+            const pepper = crypto.randomBytes(16).toString('hex');
+            let userPasswordData = {
+                email: email,
+                pepper: pepper,
+                salt: salt,
+                newPassword: password
+            }
+            let rehashNewPassword = await reHashNewPassword(userPasswordData)
+            if(rehashNewPassword){
+                const updatePasswordQuery ={
+                    text: 'UPDATE users SET password = $1 WHERE  email = $2 ',
+                    values: [rehashNewPassword, email],  // 24 hours in milliseconds
+                }
+                let updatePassword = await writeOnlyPool.query(updatePasswordQuery)
+                if(updatePassword){
+                    res.clearCookie('passwordResetCookie')
+                    res.render('index', {
+                        message: 'Your password has been changed successfully. You can now login with your new password',
+                        errors: false,
+                        csrfToken: req.session.csrfToken,
+                    })
+                }
+            }else{
+                res.render('changePassword', {
+                    email: email,
+                    authorized: true,
+                    message: false,
+                    errors: 'There was an error that occured during the reset password process. Kindly refresh and try again',
+                    csrfToken: req.session.csrfToken
+                })
+
+            }
+
+        }else{
+            res.render('changePassword', {
+                email: email,
+                authorized: true,
+                message: false,
+                errors: 'Your data input may not be valid',
+                csrfToken: req.session.csrfToken
+            })
+        }
+
+    }else{
+        res.render('changePassword', {
+            email: email,
+            authorized: true,
+            message: false,
+            errors: 'Please tick the reCAPTCHA checkbox to prove that you are human and not a robot.',
+            csrfToken: req.session.csrfToken
+        })
+
+    }
+})
+
+
+
+
+
+
+
+
+app.post('/verifyPasswordReset', async(req, res)=>{
+    const email = req.body.verificationemail;
+    const verificationToken = req.body.passwordverificationtoken;
+    const emailRegex = /^([a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9\-\.]+)\.([a-zA-Z]{2,63})$/;
+    const usernameRegex= /^[a-z0-9]+$/i;
+    if(emailRegex.test(email) && usernameRegex.test(verificationToken)){
+        const confirmTokenQuery ={
+            text: 'SELECT passwordreset FROM users WHERE email = $1',
+            values: [email],
+        }
+        let storedTokenQuery = await readOnlyPool.query(confirmTokenQuery)
+        let queryResults = storedTokenQuery.rows.passwordreset
+        console.log(queryResults)
+        if(verificationToken===queryResults){
+            res.render('changePassword', {
+                email: email,
+                message: false,
+                errors: false,
+            })
+        }else{
+            res.render('passwordresetverification', {
+                email: email,
+                message: false,
+                errors: 'Invalid user token. Please try again',
+                csrfToken: req.session.csrfToken
+            })
+        }
+
+
+    }else{
+        res.render('passwordresetverification', {
+            email: email,
+            message: false,
+            errors: 'Invalid data. Please check your input',
+            csrfToken: req.session.csrfToken
+        })
+
+    }
+
+
+})
 
 
 

@@ -195,6 +195,30 @@ describe('decryptionMethod', function(){
 
 })
 
+describe('resetPassword', function(){
+
+    //Create a salt and a pepper
+    const salt =  crypto.randomBytes(16).toString('hex');
+    const pepper = crypto.randomBytes(16).toString('hex');
+    let testPasswordData = {
+        email: 'wiwib28317@necktai.com',
+        pepper: pepper,
+        salt: salt,
+        newPassword: 'destinyIsCallingMyName'
+    }
+    it('Testing update user info function', async function(){
+        const updateInfoFunctionResult = await app.updatePasswordInfo(testPasswordData)
+        assert.strictEqual(updateInfoFunctionResult, true);
+
+
+
+    })
+    it('Rehashing new password test', async function(){
+        let result = await app.reHashNewPassword(testPasswordData)
+        assert.notStrictEqual(result, false)
+    })
+})
+
 /*
 describe('loginPostRoute',   function() {
  //validUser
