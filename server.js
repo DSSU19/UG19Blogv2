@@ -1196,8 +1196,11 @@ app.get('*', (req,res)=>{
 /*All the application post routes*/
 app.post('/sign-up',  async (req,res)=>{
         const captchaResponse = req.body['g-recaptcha-response'];
+        console.log("This is the response", captchaResponse);
         const captchaSuccess = await verifyRecaptcha(captchaResponse, req.ip);
+        console.log("Helooooooo", captchaSuccess)
         if(captchaSuccess || process.env.TEST_TYPE==='signUp') {
+
             if (signUpValidation(req.body).isValid) {
                 console.log('gets here')
                 const escapedReqBody = escapeAllInput(req.body)
@@ -1359,7 +1362,7 @@ app.post('/login', async (req, res)=>{
             } else {
                 console.log('Invalid credentials')
                 res.render('index', {
-                    errors: "Username and/or password is incorrect",
+                    errors: "Email and/or password is incorrect",
                     message: false,
                     qrCodeData: false,
                     csrfToken: req.session.csrfToken
@@ -1369,7 +1372,7 @@ app.post('/login', async (req, res)=>{
         } else {
             console.log('Invalid user data')
             res.render('index', {
-                errors: "Username and/or password is incorrect",
+                errors: "Email and/or password is incorrect",
                 message: false,
                 csrfToken: req.session.csrfToken
             })
