@@ -56,33 +56,28 @@ const writeOnlyPool = new Pool({
 
 //This includes security headers such as Content-Security-Policy, X-Content-Type-Options, X-XSS-Protection, X-Frame-Options, Strict-Transport-Security
 //This sets several secure https headers, this is known for preventing Cross Site Scripting and click-jacking attacks
-// Sets all of the defaults, but overrides `script-src` and disables the default `style-src`
-
-
+// Sets all of the defaults, but overrides `script-src`
 //To ensure that this works with the google captcha as according to their documentation: https://developers.google.com/recaptcha/docs/faq
 const nonce = crypto.randomBytes(16).toString('base64'); //A nonce needs to be generated
-
 app.use(
     helmet.contentSecurityPolicy({
         directives: {
             "script-src": ["'self'", "https://www.google.com/recaptcha/", "https://www.gstatic.com/recaptcha/", `'nonce-${nonce}'`],// This is to allow google captcha scripts to be loaded
-            "frame-src": ["https://www.google.com/recaptcha/", " https://recaptcha.google.com/recaptcha/", `'nonce-${nonce}'`] //This is to enable the google captcha scripts to be loaded by the CSP
-
-
+            "frame-src": ["https://www.google.com/recaptcha/", " https://recaptcha.google.com/recaptcha/", `'nonce-${nonce}'`], //This is to enable the google captcha scripts to be loaded by the CSP
+            "frame-ancestors": ["'none'"] //To prevent click jacking by ensuring that iframe will not be able to use the website.
         },
     })
 );
+//This also prevents click jacking by setting the X-Frame-Options to deny which prevents the website from being used in an iframe from both the actual website
+//and from external websites.
+app.use(helmet.frameguard({
+    action: 'deny'
+}));
 
 app.use(express.static('client'));
 //Use the cookie parser for the double submit cookie.
 app.use(cookieParser(process.env.cookie_secret_key));
 //app.use(cookieParser());
-
-
-
-
-
-
 // Body parser middleware
 app.use(bodyParser.json());
 //Force input to be encoded correctly.
