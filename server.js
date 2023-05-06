@@ -1831,10 +1831,12 @@ app.post('/editblog/:id', (req, res)=>{
                 res.render('editBlog', {errors: 'There was an error with updating the blog', post: '', firstname: req.session.usermail, csrfToken: req.session.csrfToken})
 
             }else{
+
+                //used to have escape input function on it.
                 const blogPost = result.rows[0]
-                const blogTitle = escapeInput(req.body.blogtitle);
-                const blogDescription = escapeInput(req.body.blogdescription);
-                const blogInfo = escapeInput(req.body.bloginfo);
+                const blogTitle = req.body.blogtitle;
+                const blogDescription = req.body.blogdescription;
+                const blogInfo = req.body.bloginfo;
                 //console.log(blogInfo, blogDescription, blogTitle)
                 const timeCreated = Date.now().toString();
                 const dateCreated = new Date(parseInt(timeCreated)).toISOString().slice(0, 10);
