@@ -29,6 +29,15 @@
             Enter all your blog Data here</textarea>
             <br><br>
         </div>
+        <% if (errors) { %>
+            <div>
+                <ul>
+                    <% for (var i = 0; i < errors.length; i++) { %>
+                        <li><%= errors[i] %></li>
+                    <% } %>
+                </ul>
+            </div>
+        <% } %>
         <div class="input_group">
             <input class = "sign-upb" type="submit" value="Submit">
         </div>
@@ -36,15 +45,7 @@
 </div>
 </div>
 
-<% if (errors) { %>
-    <div>
-        <ul>
-            <% for (var i = 0; i < errors.length; i++) { %>
-                <li><%= errors[i] %></li>
-            <% } %>
-        </ul>
-    </div>
-<% } %>
+
 
 
 </body>

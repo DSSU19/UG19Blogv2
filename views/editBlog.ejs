@@ -27,6 +27,11 @@
          <label class = "label" for="bloginfo">Blog Content:</label>
          <textarea class ="bloginfo" id="bloginfo" name="bloginfo"><%= post.bloginfo %></textarea>
         </div>
+        <% if (errors) { %>
+            <div>
+                <p> <b> <%= errors%> </b></p>
+            </div>
+        <% } %>
         <button class = "sign-upb" type="submit">Update</button>
     </form>
     <div class = "dont">
@@ -34,11 +39,7 @@
     </div>
 </div>
 </div>
-<% if (errors) { %>
-    <div>
-        <p> <b> <%= errors%> </b></p>
-    </div>
-<% } %>
+
 
 </body>
 </html>

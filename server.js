@@ -66,11 +66,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(session({
     secret: process.env.secret_key,
-    /*
-     genid: (req) => {
-        return uuid(); // use UUIDs for session IDs
-    },
-     */
+    name: 'sessionId',
     genid : function (req){
         const sessionID = crypto.randomBytes(16).toString('hex');
         const encryptionKey = crypto.randomBytes(32);
@@ -85,7 +81,7 @@ app.use(session({
     cookie: {
         secure: true,
         httpOnly:true,
-        maxAge:  5 * 60 * 60 * 1000, //Cookies expire after 5 hours, in order to prevent session hijacking
+        expires:  5 * 60 * 60 * 1000, //Cookies expire after 5 hours, in order to prevent session hijacking
         sameSite: 'strict',
     }
 }));
@@ -126,10 +122,11 @@ app.use('/addBlogPost', (req,res,next)=>{
         req.session.doubleSubmitCookie = crypto.createHmac('sha256', process.env.token_secret_key).update(crypto.randomBytes(32).toString('hex')).digest('hex');
         // Store the CSRF token in a cookie.
         res.cookie('doubleSubmitCookie', req.session.doubleSubmitCookie,{
-            secure: 'true', //cookie can only be transmitted over https
+            secure: 'true', //cookie can only be transmitted over https as OWASP reccomended
             httpOnly: true, //prevents client side script from accessing the cookie
             sameSite: 'strict',// prevents cookie from being sent in cross site requests
-            signed: true, //signs the cookie to prevent the cookie from being tampered with
+            maxAge:  5 * 60 * 60 * 1000, //Cookies expire after 5 hours, in order to prevent session hijacking
+            signed: true, //signs the cookie to prevent the cookie from being tampered for additional security
         });
         //const twoMinutesTimer = 120000 //Two minutes for testing
         const fortyFiveMinutesTimer = 1000*60*45
@@ -161,8 +158,8 @@ app.use('/login', (req,res,next)=>{
                 const elapsed = now - lastAttempt;
                 const fiveMinuteTester = 1000*60*5
                 const fifteenMinuteTimer= 15 * 60 * 1000
-                if (elapsed <fiveMinuteTester ) {
-                    const remainingTime = fiveMinuteTester - elapsed;
+                if (elapsed <fifteenMinuteTimer ) {
+                    const remainingTime = fifteenMinuteTimer - elapsed;
                     const remainingMinutes = Math.ceil(remainingTime / 60000);
                     res.render('index', {
                         errors: `Too many login attempts. Please try again after ${remainingMinutes} minute(s).`,
@@ -170,7 +167,7 @@ app.use('/login', (req,res,next)=>{
                     })
                     return;
                 }
-                if (elapsed >= fiveMinuteTester) {
+                if (elapsed >= fifteenMinuteTimer) {
                     // Reset loginAttempts count
                     req.session.loginAttempts = 0;
                 }
@@ -983,6 +980,8 @@ async function decryptTotpInfo(storedEncryptedWord, email){
 
 }
 
+
+//Sanitize input against Server side templating:
 /*All the application get routes*/
 //Routes
 
@@ -1034,13 +1033,23 @@ app.get('/resetPassword', (req, res)=>{
 
 app.get('/changePassword', (req, res)=>{
     // Extract the email and token from the URL query string
-    const email = req.query.email;
+    const emailRegex = /^([a-zA-Z0-9_\-\.]+)@([a-zA-Z0-9\-\.]+)\.([a-zA-Z]{2,63})$/;
+    const tokenRegex= /^[a-z0-9]+$/i;
+    const currentTimeRegex = /^\d{13}$/
+    const email = req.query.email; // Data needs to be sanitized before being passed.
     const token = req.query.token;
+    const queryCreationTime = req.query.creationTime;
     const thirtyMinuteTimer = 1000*60*30;
-    const expirationTime = req.query.creationTime + thirtyMinuteTimer
+    const expirationTime =  queryCreationTime + thirtyMinuteTimer
     const currentTime = Date.now()
-    if(req.signedCookies.passwordResetCookie===token && currentTime < expirationTime ){
-        res.render('changePassword', {authorized: true, email: email, errors: false, csrfToken: req.session.csrfToken, message: false})
+    //Input validation is utilised her to prevent server side encry
+    if(emailRegex.test(email) && tokenRegex.test(token)&& currentTimeRegex.test(queryCreationTime)){
+        if((req.signedCookies.passwordResetCookie===token) && (currentTime < expirationTime)){
+            res.render('changePassword', {authorized: true, email: email, errors: false, csrfToken: req.session.csrfToken, message: false})
+        }else{
+            res.render('changePassword', {authorized: false, errors: false, csrfToken: null, message: false, email: null})
+
+        }
     }else{
         res.render('changePassword', {authorized: false, errors: false, csrfToken: null, message: false, email: null})
 
@@ -1055,7 +1064,7 @@ app.get('/blogDashboard', (req, res)=>{
     if(!req.session.usermail ){
         //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
         if(userTimedOut) {
-            res.clearCookie('connect.sid');
+            res.clearCookie('sessionId');
             res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken})
         }else{
             res.redirect('/')
@@ -1078,26 +1087,43 @@ app.get('/blogDashboard', (req, res)=>{
         })
     }
 })
-app.get('/editblog/:id', (req, res)=>{
+app.get('/editblog/:id', async(req, res)=>{
     if (req.session.usermail){
         const blogId = req.params.id;
         const getBlogPostQuery = {
-            text: 'SELECT * FROM blogData WHERE id = $1',
-            values: [blogId]
+            text: 'SELECT * FROM blogData WHERE id = $1 AND blogAuthor =$2',
+            values: [blogId, req.session.usermail]
         };
         pool.query(getBlogPostQuery, (err, result)=>{
             if(err){
                 res.render('editBlog', {errors: 'There was an error with updating the blog', post: '', firstname: req.session.firstname, csrfToken: req.session.csrfToken})
             }else{
                 const blogPost = result.rows[0]
-                res.render('editBlog', {errors: false, post: blogPost, firstname: req.session.firstname, csrfToken: req.session.csrfToken})
+                console.log(blogPost)
+                if(blogPost){
+                    res.render('editBlog', {errors: false, post: blogPost, firstname: req.session.firstname, csrfToken: req.session.csrfToken})
+                }else{
+                    const getAllPostQuery = {
+                        text: 'SELECT * FROM blogdata ORDER BY datecreated DESC ',
+                    };
+
+                    readOnlyPool.query(getAllPostQuery, (err, result)=>{
+                        if (err){
+                            console.error(err);
+                            res.render('blogDashboard', {firstname: req.session.firstname, errors: "There was an error retrieving the posts", post: '', usermail:req.session.usermail,  csrfToken: req.session.csrfToken })
+                        }else{
+                            const blogPosts = result.rows;
+                            res.render('blogDashboard', {firstname: req.session.firstname, errors: "You are not authorised to edit that blog post", posts: blogPosts, usermail: req.session.usermail,  csrfToken: req.session.csrfToken })
+                        }
+                    })
+                }
             }
         })
 
     }else{
         //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
         if(userTimedOut) {
-            res.clearCookie('connect.sid');
+            res.clearCookie('sessionId');
             res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken})
         }else{
             res.redirect('/')
@@ -1110,7 +1136,7 @@ app.get('/addBlogPost', (req, res)=>{
     if(!req.session.usermail){
         //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
         if(userTimedOut) {
-            res.clearCookie('connect.sid');
+            res.clearCookie('sessionId');
             res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken, doubleSubmitCookie: req.session.doubleSubmitCookie})
         }else{
             res.redirect('/')
@@ -1142,7 +1168,7 @@ app.get('/readblog/:id', (req, res) => {
     }else{
         //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
         if(userTimedOut) {
-            res.clearCookie('connect.sid');
+            res.clearCookie('sessionId');
             res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken})
         }else{
             res.redirect('/')
@@ -1176,7 +1202,7 @@ app.get('/search', (req, res) => {
     }else{
         //If the user was timed out due to being inactive for 30 minutes, then they get a message in order to improve usability.
         if(userTimedOut) {
-            res.clearCookie('connect.sid');
+            res.clearCookie('sessionId');
             res.render('index', {errors:false, message: "You were logged out due to being inactive for 30 minutes. So sorry for the inconvenience.", csrfToken: req.session.csrfToken})
         }else{
             res.redirect('/')
@@ -1196,11 +1222,9 @@ app.get('*', (req,res)=>{
 /*All the application post routes*/
 app.post('/sign-up',  async (req,res)=>{
         const captchaResponse = req.body['g-recaptcha-response'];
-        console.log("This is the response", captchaResponse);
         const captchaSuccess = await verifyRecaptcha(captchaResponse, req.ip);
-        console.log("Helooooooo", captchaSuccess)
+        console.log(captchaSuccess)
         if(captchaSuccess || process.env.TEST_TYPE==='signUp') {
-
             if (signUpValidation(req.body).isValid) {
                 console.log('gets here')
                 const escapedReqBody = escapeAllInput(req.body)
@@ -1518,7 +1542,7 @@ app.post('/logout', (req, res)=> {
             console.log(err);
             res.status(500).send('Server Error');
         } else {
-            res.clearCookie('connect.sid');
+            res.clearCookie('sessionId');
             res.redirect('/');
         }
     });
@@ -1572,6 +1596,13 @@ app.post('/passwordReset', async(req,res)=>{
                 }
 
 
+            }else{
+                res.render('passwordresetverification', {
+                    email: email,
+                    message: false,
+                    errors: false,
+                    csrfToken: req.session.csrfToken
+                })
             }
         }else{
             res.render('resetpassword', {
@@ -1766,10 +1797,9 @@ app.post('/deleteblog/:id', (req, res)=>{
     if(req.session.usermail){
         const id = req.params.id;
         const deletePostQuery = {
-            text: 'DELETE FROM blogdata WHERE id = $1',
-            values: [id] // 24 hours in milliseconds
+            text: 'DELETE FROM blogdata WHERE id = $1 AND blogauthor = $2',
+            values: [id, req.session.usermail] // 24 hours in milliseconds
         };
-
         pool.query(deletePostQuery, (err, results)=>{
             if(err){
                 console.log(err)
@@ -1809,9 +1839,9 @@ app.post('/editblog/:id', (req, res)=>{
                 const timeCreated = Date.now().toString();
                 const dateCreated = new Date(parseInt(timeCreated)).toISOString().slice(0, 10);
                 //let allData = [blogTitle, blogDescription, blogInfo]
-                let allData = { blogTitle: blogTitle, blogDescription:blogDescription , blogData: blogInfo };
+                //let allData = { blogTitle: blogTitle, blogDescription:blogDescription , blogData: blogInfo };
 
-                if(blogFormDataValidation(allData).isValid){
+                /*if(blogFormDataValidation(allData).isValid){*/
                     const updateQuery = {
                         text: 'UPDATE blogData SET blogtitle = $1, bloginfo = $2, datecreated= $3, blogdescription = $4 WHERE id = $5',
                         values: [blogTitle, blogInfo, dateCreated, blogDescription, blogId]
@@ -1822,10 +1852,12 @@ app.post('/editblog/:id', (req, res)=>{
                         console.log(err)
                         return res.render("editBlog", {errors: 'There was an error when trying to edit your blog', firstname: req.session.firstname, post:blogPost, csrfToken: req.session.csrfToken});
                     })
-                }else{
+               // }
+
+                /*else{
                     return res.render("editBlog", {errors: 'There is an error in your input', firstname: req.session.firstname, post:blogPost, csrfToken: req.session.csrfToken});
 
-                }
+                }*/
             }
         })
     }else{
@@ -1837,19 +1869,20 @@ app.post('/editblog/:id', (req, res)=>{
 app.post('/addBlogPost', (req, res)=>{
     //const errors = validationResult(req);
     if(req.session.usermail){
-        console.log("invalid token")
-        if(!blogFormDataValidation(req.body).isValid) {
+
+     /*    console.log("invalid token")
+     if(!blogFormDataValidation(req.body).isValid) {
             //const escapedInputPart2 = encodeURIComponent(req.body)
             //console.log(escapedInputPart2)
 
             const errors = blogFormDataValidation(req.body).errors;
             return res.render("addBlogPost", {errors:  errors , csrfToken:req.session.csrfToken, doubleSubmitCookie: req.session.doubleSubmitCookie});
-        }else{
-            const escapedReqBody = escapeAllInput(req.body)
+        }else{*/
 
-            const blogTitle = escapedReqBody.blogTitle
-            const  blogData  = escapedReqBody.blogData
-            const blogDescription = escapedReqBody.blogDescription
+            //const escapedReqBody = escapeAllInput(req.body)
+            const blogTitle = req.body.blogTitle
+            const  blogData  = req.body.blogData
+            const blogDescription = req.body.blogDescription
             const timeCreated = Date.now().toString();
             const dateCreated = new Date(parseInt(timeCreated)).toISOString().slice(0, 10);
             const author = req.session.usermail;
@@ -1879,7 +1912,7 @@ app.post('/addBlogPost', (req, res)=>{
             })
             console.log(blogTitle);
             console.log(blogData);
-        }
+
     }else{
         res.redirect('/')
 

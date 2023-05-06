@@ -3,6 +3,7 @@ const supertest = require('supertest');
 const app = require('../server.js');
 const { expect } = require('chai');
 const request = supertest(app.app);
+const sinon = require('sinon');
 const nodemailer = require("nodemailer");
 const crypto = require('crypto');
 const fs = require('fs');
@@ -26,8 +27,8 @@ async function deleteUserFromFile(email, saltFileName, pepperFileName){
     const pepperData = await fs.promises.readFile(pepperFileName, 'utf8');
     const pepperObj = JSON.parse(pepperData);
     // Find the index of the object to remove
-    const index = saltObj.user_info.findIndex((obj) => obj.email === 'testuser@gmail.com');
-    const pepper_index = pepperObj.user_info.findIndex((obj) => obj.email === 'testuser@gmail.com');
+    const index = saltObj.user_info.findIndex((obj) => obj.email === email);
+    const pepper_index = pepperObj.user_info.findIndex((obj) => obj.email === email);
 
     // Remove the object if it exists
     if (index !== -1 && pepper_index !== -1) {
@@ -44,7 +45,11 @@ describe('validateSignUpInputs', function() {
     //Testing when the user doesn't put anything in the username,  password, and email
     it('Testing when the user doesn\'t put anything in the username and password', function() {
         //should return an object with isValid equal to false and an array of errors when given invalid inputs
-        const reqBody = {username: '', password: '', email: '',passwordConfirmation: '' };
+        const reqBody = {
+            username: '',
+            password: '', email: '',
+            passwordConfirmation: ''
+        };
         const result = app.signUpValidation(reqBody);
         assert.strictEqual(result.isValid, false);
         assert(Array.isArray(result.errors));
@@ -209,29 +214,34 @@ describe('userAlreadyExists', function(){
         assert.strictEqual(userExists, true);
     });
 
+    it('Testing when the user does not exists', async function() {
+        const userExists = await app.userExistsCheck('abs145@necktai.com');
+        assert.strictEqual(userExists, false);
+    });
+
 })
 
-describe('passwordStore',  function (){
+describe('passwordStore',  function () {
     //Create a salt and a pepper
-    const salt =  crypto.randomBytes(16).toString('hex');
+    const salt = crypto.randomBytes(16).toString('hex');
     const pepper = crypto.randomBytes(16).toString('hex');
-    const saltFileName= 'test/info/test_salt.json'
-    const pepperFileName= 'test/info/test_pepper.json'
-    const testSaltData={
-        email:'testuser@gmail.com',
+    const saltFileName = 'test/info/test_salt.json'
+    const pepperFileName = 'test/info/test_pepper.json'
+    const testSaltData = {
+        email: 'testuser@gmail.com',
         salt: salt
     }
-    const testPepper={
-        email:'testuser@gmail.com',
+    const testPepper = {
+        email: 'testuser@gmail.com',
         pepper: pepper
     }
-    before(async function() {
+    before(async function () {
         await deleteUserFromFile(testSaltData.email, saltFileName, pepperFileName)
         // runs before all tests in this file regardless where this line is defined
     });
     //Testing the password store function, should return true
-    it('Testing salt and pepper storage ', async function() {
-       const saltResult = await app.storePasswordInfo(saltFileName, testSaltData)
+    it('Testing salt and pepper storage ', async function () {
+        const saltResult = await app.storePasswordInfo(saltFileName, testSaltData)
         assert.strictEqual(saltResult, true)
         const pepperResult = await app.storePasswordInfo(pepperFileName, testPepper)
         assert.strictEqual(pepperResult, true)
@@ -239,54 +249,60 @@ describe('passwordStore',  function (){
 
 
     //Testing the password store function, should return true
-    it('Testing salt and pepper duplicates', async function() {
+    it('Testing salt and pepper duplicates', async function () {
         //Testing with user
-        const salt =  crypto.randomBytes(16).toString('hex');
+        const salt = crypto.randomBytes(16).toString('hex');
         const pepper = crypto.randomBytes(16).toString('hex');
         const saltResult = await app.storePasswordInfo(saltFileName, testSaltData)
         assert.strictEqual(saltResult, false)
-        const pepperResult =await  app.storePasswordInfo(pepperFileName, testPepper)
+        const pepperResult = await app.storePasswordInfo(pepperFileName, testPepper)
         assert.strictEqual(pepperResult, false)
     });
-
-
 })
 
 
 
-/*
-describe('POST /sign-up', () => {
-    const testUserData = {
-        email: 'wiwib28317@necktai.com',
-        password: 'seates123',
-        passwordConfirmation: 'seates123',
-        username: 'testuser'
-    };
 
-/*    before(async function() {
+
+describe('Sign up full functionality', () => {
+    let csrfTokenValue = '7f5c21a7d98f9a47857289d89a63fd8d98cd4fbe50f25906b910f1350f5a91b0';
+    let email = 'wiwib28317@necktai.com'
+    before(async function() {
         const saltFileName= 'test/info/test_salt.json'
         const pepperFileName= 'test/info/test_pepper.json'
-        await deleteUserFromFile(testUserData.email, saltFileName, pepperFileName)
+        await deleteUserFromFile(email, saltFileName, pepperFileName)
         const deleteUserQuery = {
             text: 'DELETE FROM users WHERE email = $1',
-            values: [testUserData.email]
+            values: [email]
         };
         await testPool.query(deleteUserQuery).then(console.log('done'));
     })
     it('Valid user sign-up', done => {
-        request.post('/sign-up')
-            .send(testUserData)
+        request
+            .post('/sign-up')
+            .send(
+                {
+                    email: email,
+                    password: 'seates123',
+                    passwordConfirmation: 'seates123',
+                    username: 'testuser',
+                    csrftokenvalue: csrfTokenValue, // Include the CSRF token in the request body
+                    authmethod: 'totp',
+                }
+            )
             .expect(200)
             .expect('Content-Type', /html/)
-            .end((err, res) => {
+        // Check that the email and csrfToken values were passed to the view
+            .end((err, res, req) => {
+                console.log(res.text)
+                expect(res.text).to.contain('Email Verficiation Token')
                 if (err) return done(err);
-                assert.strictEqual(app.signUpValidation(testUserData).isValid, true);
+                //assert.strictEqual(app.signUpValidation(testUserData).isValid, true);
                 done();
             });
     });
 });
 
-*/
 
 
 
