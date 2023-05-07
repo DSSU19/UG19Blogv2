@@ -191,7 +191,80 @@ GRANT INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO writeonly_user;
 GRANT USAGE, INSERT, UPDATE, DELETE ON ALL SEQUENCES IN SCHEMA public TO writeonly_user;
 ``` 
 
-3. A readwrite user that selects, inserts, delete, update and delete. 
+3. A readwrite user that selects, inserts, delete, update and delete the data on all the database. 
+  ```postgresql
+CREATE ROLE writeonly_user WITH LOGIN PASSWORD 'mypassword' NOSUPERUSER NOCREATEDB NOCREATEROLE;
+GRANT CONNECT ON DATABASE mydatabase TO writeonly_user;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO writeonly_user;
+GRANT USAGE, INSERT, UPDATE, DELETE ON ALL SEQUENCES IN SCHEMA public TO writeonly_user;
+``` 
+
+
+### Pool Instance Configuration:
+In the code a new pool instance is created to connect to the database through pg client. An example can be
+shown in the code below:
+```javascript
+//Switches the database name based on whether we are testing or using the actual application
+const databaseName = process.env.NODE_ENV === "test" ? process.env.testDatabase : process.env.database;
+
+const pool = new Pool({
+    host: process.env.localhost,
+    port: process.env.port,
+    user: process.env.user, //name of the readwriteuser
+    database: databaseName,
+    password:  process.env.password,//password of the readwrite user created
+});
+
+const readOnlyPool = new Pool({
+    host: process.env.localhost,
+    port: process.env.port,
+    user: process.env.readOnlyUser, //name of the readonlyuser
+    database: databaseName,
+    password:  process.env.readOnlyUserPassword, //password of the readonlyuser
+});
+
+const writeOnlyPool = new Pool({
+    host: process.env.localhost,
+    port: process.env.port,
+    user: process.env.writeOnlyUser,
+    database: databaseName,
+    password:  process.env.writeOnlyUserPassword,
+});
+```
+In your .env file you need to place the appropriate pool configurations in there. Ensure that the 
+user and password is the name and password of the readwrite user that you created. Similarly,
+
+###Dot env configuration
+Ensure that in your env file, you have all of the following configurations accurately
+filled. A template of the info.env file can be seen below
+```dotenv
+# Database Configuration
+user = ''     #this is the readwrite user created. 
+readOnlyUser = ''
+writeOnlyUser = ''
+port = ''
+host = ''
+password = ''
+readOnlyUserPassword = ''
+writeOnlyUserPassword = ''
+database =''
+testDatabase = ''
+# Configurations to send email via node-mailer transporter
+email_port = '' 
+email_host = ''
+email_secure = ''
+email_user =  ''
+email_pass=  ''
+
+# Secret keys to ensure other blog functionalities work properly
+secret_key = ''
+cookie_secret_key = ''
+recaptcha_secret_key = ''
+token_secret_key = ''
+encryption_key = ''
+encryption_iv = ''
+test_csrf_token = ''
+```
 
 
 ## Academic publications
