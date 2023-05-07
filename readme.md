@@ -1,11 +1,6 @@
 # Speak Your Mind 
 
-<div>
-  <p align="center">
-    <img src="SpeakYourMind.png" width="300px"> 
-  </p>
-</div>
-
+![Speak your mind login page](https://github.com/DSSU19/UG19Blogv2/blob/main/SpeakYourMind.png")
 
 Speak Your Mind is a secure web based blog where users can freely express
  their and popular or unpopular opinions as well as read others own 
