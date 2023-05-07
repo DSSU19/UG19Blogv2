@@ -120,7 +120,8 @@ Below is an Entity Relationship Diagram to help you be able to set up a database
 
 
 ```mermaid
-users ||--o|totp : HAS
+erDiagram
+    users ||--o|totp : HAS
     users ||--o|otps: HAS
     users ||--o{blogdata: HAS
     
@@ -155,7 +156,6 @@ users ||--o|totp : HAS
         varchar blogauthor
         integer user_id  FK
     }
-
 ```
     
 
