@@ -14,30 +14,6 @@ security vulnerabilities:
 6. DDOS
 7. ClickJacking
 
-## Table of contents
-
-* [Overview](#Overview)
-* [ThePhish example usage](#thephish-example-usage)
-    + [A user sends an email to ThePhish](#a-user-sends-an-email-to-thephish)
-    + [The analyst analyzes the email](#the-analyst-analyzes-the-email)
-* [Implementation](#implementation)
-* [Installation](#installation)
-    + [Install it using Docker and Docker Compose](#install-it-using-docker-and-docker-compose)
-    + [Install it from scratch](#install-it-from-scratch)
-* [Configure the analyzers](#configure-the-analyzers)
-    + [Configure the levels of the analyzers](#configure-the-levels-of-the-analyzers)
-    + [Tested analyzers](#tested-analyzers)
-    + [Enable the *MISP* analyzer](#enable-the-misp-analyzer)
-    + [Enable the *Yara* analyzer](#enable-the-yara-analyzer)
-* [Enable the *Mailer* responder](#enable-the-mailer-responder)
-* [Use the whitelist](#use-the-whitelist)
-* [Contribution to TheHive4py](#contribution-to-thehive4py)
-* [License](#license)
-* [Academic publications](#academic-publications)
-* [GitHub repositories mentioning ThePhish](#github-repositories-mentioning-thephish)
-* [Who talks about ThePhish](#who-talks-about-thephish)
-* [Credits](#credits)
-
 
 ## Overview
 
