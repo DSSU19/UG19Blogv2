@@ -236,7 +236,7 @@ user and password is the name and password of the readwrite user that you create
 
 ###Dot env configuration
 Ensure that in your env file, you have all of the following configurations accurately
-filled. A template of the info.env file can be seen below
+filled. A template of the <b> info.env </b> file can be seen below
 ```dotenv
 # Database Configuration
 user = ''     #this is the readwrite user created. 
