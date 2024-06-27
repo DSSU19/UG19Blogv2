@@ -81,6 +81,7 @@ app.use(cookieParser(process.env.cookie_secret_key));
 // Body parser middleware
 app.use(bodyParser.json());
 //Force input to be encoded correctly.
+
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(session({
     secret: process.env.secret_key,
