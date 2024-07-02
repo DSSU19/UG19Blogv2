@@ -1,5 +1,5 @@
 const express = require('express');
-require('dotenv').config({path:'info.env'});
+require('dotenv').config({path:'.env'});
 const https = require('https');
 const bodyParser = require('body-parser');
 const nodemailer = require("nodemailer");
@@ -39,7 +39,7 @@ const pool = new Pool({
 });
 
 const readOnlyPool = new Pool({
-    host: process.env.localhost,
+    host: process.env.host,
     port: process.env.port,
     user: process.env.readOnlyUser,
     database: databaseName,
@@ -47,7 +47,7 @@ const readOnlyPool = new Pool({
 });
 
 const writeOnlyPool = new Pool({
-    host: process.env.localhost,
+    host: process.env.host,
     port: process.env.port,
     user: process.env.writeOnlyUser,
     database: databaseName,
@@ -703,7 +703,9 @@ async function validateLoginCredentials(password, email){
 }
 
 async function verifyRecaptcha(response, remoteip = null) {
+    console.log(response)
     const secret = process.env.recaptcha_secret_key;
+    console.log(secret)
     const url = 'https://www.google.com/recaptcha/api/siteverify';
     try {
         const result = await axios.post(url, null, {
@@ -1243,6 +1245,7 @@ app.post('/sign-up',  async (req,res)=>{
         const captchaResponse = req.body['g-recaptcha-response'];
         const captchaSuccess = await verifyRecaptcha(captchaResponse, req.ip);
         console.log(captchaSuccess)
+        console.log(process.env.host)
         if(captchaSuccess || process.env.TEST_TYPE==='signUp') {
             if (signUpValidation(req.body).isValid) {
                 console.log('gets here')
@@ -1359,8 +1362,9 @@ app.post('/email-verification',  (req, res) => {
 
 app.post('/login', async (req, res)=>{
     const captchaResponse = req.body['g-recaptcha-response'];
+    console.log(captchaResponse)
     const captchaSuccess = await verifyRecaptcha(captchaResponse, req.ip);
-    //console.log("Captcha success: " + captchaSuccess)
+    console.log("Captcha success: " + captchaSuccess)
     if(captchaSuccess) {
         if (loginValidation(req.body)) {
             const escapedLoginBody = escapeAllInput(req.body);

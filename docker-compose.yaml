@@ -2,6 +2,28 @@ services:
   server:
     build:
       context: .
-    env_file: ./info.env
+    env_file: ./.env
+    environment:
+      - host=$host
+      - user=$user
+      - password=$password
+      - database=$database
+      - readOnlyUser=$readOnlyUser
+      - readOnlyUserPassword = $readOnlyUserPassword
     ports:
-      - 8080:8080
+      - $node_port:$node_port
+    depends_on:
+      - db
+  db:
+    image: postgres
+    restart: unless-stopped
+    env_file: ./.env
+    environment:
+      - POSTGRES_USER=$user
+      - POSTGRES_PASSWORD=$password
+      - POSTGRES_DB=$database
+    volumes:
+      - ./initdb:/docker-entrypoint-initdb.d # Mount initdb directory
+    ports:
+      - $port:$port
+
