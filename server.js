@@ -31,7 +31,7 @@ const { Pool } = require('pg');
 const databaseName = process.env.NODE_ENV === "test" ? process.env.testDatabase : process.env.database;
 
 const pool = new Pool({
-    host: process.env.localhost,
+    host: process.env.host,
     port: process.env.port,
     user: process.env.user,
     database: databaseName,
