@@ -12,6 +12,8 @@ services:
       - readOnlyUserPassword = $readOnlyUserPassword
     ports:
       - $node_port:$node_port
+    volumes:
+      - ./info:/usr/src/app/info
     depends_on:
       - db
   db:
@@ -24,6 +26,7 @@ services:
       - POSTGRES_DB=$database
     volumes:
       - ./initdb:/docker-entrypoint-initdb.d # Mount initdb directory
+      - ./postgres-data:/var/lib/postgresql/data
     ports:
       - $port:$port
 

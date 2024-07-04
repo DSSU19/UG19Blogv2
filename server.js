@@ -1256,6 +1256,7 @@ app.post('/sign-up',  async (req,res)=>{
                 const authMethod = escapedReqBody.authmethod;
                 //Check if the user already exists in the system:
                 userExistsCheck(email).then(async (userExists) => {
+                    console.log(userExists)
                     if (userExists) {
                         //console.log(res.toString())
                         //Redirect the user to the email verification page in order to prevent account enumeration, but no actual email will be sent to that user
@@ -1916,7 +1917,7 @@ app.post('/addBlogPost', (req, res)=>{
                 text: 'SELECT id FROM users WHERE email = $1',
                 values: [author],  // 24 hours in milliseconds
             }
-            writeOnlyPool.query(userIDQuery).then((results)=>{
+            readOnlyPool.query(userIDQuery).then((results)=>{
                 let user_id = results.rows[0].id
                 //console.log(user_id)
                 const insertQuery = {
@@ -1926,6 +1927,7 @@ app.post('/addBlogPost', (req, res)=>{
 
                 pool.query(insertQuery)
                     .then((results)=>{
+                        console.log('get here')
                         console.log(results.rows)
                         res.redirect('/blogDashboard')})
                     .catch(err=>{

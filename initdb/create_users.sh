@@ -15,4 +15,12 @@ psql -v ON_ERROR_STOP=1 --username "$user" --dbname "$database" <<-EOSQL
     GRANT USAGE ON SCHEMA public TO ${writeOnlyUser};
     GRANT INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${writeOnlyUser};
     ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT INSERT, UPDATE, DELETE ON TABLES TO ${writeOnlyUser};
+
+
+    CREATE USER ${user} WITH PASSWORD '${password}';
+    GRANT CONNECT ON DATABASE ${database} TO ${user};
+    \c ${database}
+    GRANT USAGE ON SCHEMA public TO ${user};
+    GRANT SELECT INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO ${user};
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT INSERT, UPDATE, DELETE ON TABLES TO ${user};
 EOSQL
