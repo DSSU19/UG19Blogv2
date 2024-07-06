@@ -4,7 +4,7 @@
 
 Speak Your Mind is a secure web based blog where users can freely express
  their and popular or unpopular opinions as well as read others own 
-without being judged. It ha been coded to mitigate against the following 
+without being judged. It has been coded to mitigate against the following 
 security vulnerabilities:
 1. Account enumeration
 2. Session hijacking
