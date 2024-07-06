@@ -84,6 +84,12 @@ The above will run the server.js file. Although, everything has
 been installed, the application won't function properly because
 the PostgreSQL database needs to be set up. 
 
+##  Captcha Configuration
+You need to set up a captcha in order for your version of the application to work. 
+To do this you must:
+ 1. Create a Google reCAPTCHA Account using v2 on this link: https://www.google.com/recaptcha/admin/create
+ 2. Follow the reCaptcha v2 documentation: https://developers.google.com/recaptcha/docs/display to configure your captcha. 
+
 ## Docker
 
 The application can be cloned and run using Docker. 
