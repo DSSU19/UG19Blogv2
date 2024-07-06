@@ -84,11 +84,20 @@ The above will run the server.js file. Although, everything has
 been installed, the application won't function properly because
 the PostgreSQL database needs to be set up. 
 
+## Docker
+
+The application can be cloned and run using Docker. 
+If you have docker installed or you have to do is run the docker compose command below:
+
+```
+docker-compose up --build
+```
+If not, you would first have to download Docker from their official website. 
+
 ## Database Configuration
-In order for the application to work, you will need to create a set up a database.
+Alternatively, if you don't want to use Docker, you may have to set up the database
+in order for the application to work properly. 
 Below is an Entity Relationship Diagram to help you be able to set up a database.
-
-
 
 ```mermaid
 erDiagram
